@@ -62,6 +62,9 @@ change is a decision rather than a rediscovery.
 | D4 | In-place writes use **move operations**, preserving `added_at` | Bulk replace | Bulk replace resets every `added_at` to now, which permanently destroys the data the date-added comparator reads. Sort once and that comparator is meaningless forever after |
 | D5 | Redirect URI is the **app root**, not a `/callback` path | A routed callback page | Removes the need for a router library entirely |
 | D6 | **PapaParse** is the only added runtime dependency | Hand-rolled RFC 4180 parser | Hand-rolling is the false economy that costs a day on a BOM and a quoted comma |
+| D7 | Audience is **the author alone** | Sharing with a few people; public release | Keeps the Connect screen terse rather than a tutorial, and sidesteps the Development Mode 25-user cap entirely |
+| D8 | Desktop and mobile are **equally designed** | Desktop-only, with a mobile fallback | The before/after diff needs two real designs — a side-by-side and a genuinely good single-column form — not one squeezed into the other |
+| D9 | Track lists are **windowed** from the start | Plain rendering, revisited if it slows down | Playlists run to ~400 today but are expected to grow. Windowing later means rewriting the preview, the surface most expensive to change |
 
 ---
 
