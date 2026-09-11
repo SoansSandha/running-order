@@ -107,7 +107,7 @@
 .board-cols,
 .board-row {
   display: grid;
-  grid-template-columns: var(--cols, 92px minmax(0, 1fr) 20ch 11ch 6ch);
+  grid-template-columns: var(--cols, 104px minmax(0, 1fr) 20ch 13ch 8ch);
   align-items: stretch;
   gap: 0;
 }
@@ -193,6 +193,7 @@
 .slots {
   flex-direction: row !important;
   align-items: baseline !important;
+  justify-content: flex-start !important;
   gap: 5px;
   font-size: 0.9rem;
 }
@@ -241,6 +242,11 @@
 .row-meta {
   font-size: 0.8rem;
   color: var(--flap-dim);
+  white-space: nowrap;
+}
+
+.col-label {
+  white-space: nowrap;
 }
 
 .row-mobile-sub {
@@ -631,7 +637,7 @@
 /* ---- Playlist board rows ---------------------------------------------- */
 
 .pl-row {
-  --cols: 52px minmax(0, 1fr) 12ch 9ch;
+  --cols: 64px minmax(0, 1fr) 14ch 11ch;
   --row-h: 58px;
   width: 100%;
   text-align: left;
@@ -683,7 +689,7 @@
    */
   .board-cols,
   .board-row {
-    --cols: 76px minmax(0, 1fr) 6ch;
+    --cols: 88px minmax(0, 1fr) 8ch;
   }
 
   .board-row {
@@ -707,7 +713,7 @@
   }
 
   .pl-row {
-    --cols: 52px minmax(0, 1fr) 9ch;
+    --cols: 64px minmax(0, 1fr) 11ch;
   }
 
   .lever-row {
