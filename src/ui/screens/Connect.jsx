@@ -21,7 +21,8 @@ export function ConnectScreen({ auth }) {
         tally={[{ label: 'Service', value: status === 'restoring' ? 'RESUMING' : 'AWAITING' }]}
       />
 
-      <div className="section section-centred split">
+      <div className="section-centred">
+      <div className="split">
         <div className="prose">
           <p>
             Reorders a Spotify playlist in place, or into a sorted copy. It moves
@@ -79,6 +80,7 @@ export function ConnectScreen({ auth }) {
             </Lever>
           </LeverRow>
         </form>
+      </div>
       </div>
     </Frame>
   )
