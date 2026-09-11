@@ -1,0 +1,174 @@
+/*
+ * The board's material system.
+ *
+ * Everything here describes one physical object: an enamelled steel
+ * departure board with hinged flap cards seated in it. Colour is quarantined
+ * to state, the way a real board only inks DELAYED.
+ */
+
+:root {
+  /* Board body — enamelled steel, not black. Lit slightly from above. */
+  --board: #17191b;
+  --board-lit: #1e2225;
+  --board-deep: #101214;
+  --seam: #0d0f10;
+  --rule: #32383c;
+  --rule-soft: #23282b;
+
+  /* Flap characters — warm cream, the colour of a printed flap under light */
+  --flap: #f0e7d4;
+  --flap-dim: #9d968a;
+  --flap-faint: #6a655d;
+
+  /* State, and state only */
+  --amber: #f2a71b;
+  --amber-deep: #4a3a12;
+  --green: #4faa6e;
+  --green-deep: #16321f;
+  --red: #e2705a;
+  --red-deep: #3d1c16;
+
+  --shadow-seat: 0 1px 0 rgb(255 255 255 / 3%), 0 2px 6px -2px rgb(0 0 0 / 55%);
+  --shadow-lift: 0 6px 18px -6px rgb(0 0 0 / 70%);
+
+  --sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
+  --cond: 'Barlow Condensed', 'Barlow', ui-sans-serif, sans-serif;
+  --mono: 'Azeret Mono Variable', ui-monospace, monospace;
+
+  --step: 4px;
+  --gutter: clamp(16px, 3vw, 40px);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: var(--board-deep);
+  color: var(--flap);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * Browser surfaces. These ship with defaults belonging to no design system,
+ * so the board claims them too.
+ */
+::selection {
+  background: var(--amber);
+  color: var(--board-deep);
+}
+
+:root {
+  caret-color: var(--amber);
+  accent-color: var(--amber);
+  scrollbar-color: var(--rule) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--board-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border: 2px solid var(--board-deep);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--flap-faint);
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--flap);
+  text-decoration-color: var(--amber);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+/* Every numeral in this product is tabular — columns must read down. */
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
+}
+
+/* Type roles */
+.destination {
+  font-family: var(--cond);
+  font-weight: 600;
+  font-size: clamp(2rem, 5.5vw, 4.25rem);
+  line-height: 0.94;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  margin: 0;
+  color: var(--flap);
+}
+
+.board-heading {
+  font-family: var(--cond);
+  font-weight: 600;
+  font-size: clamp(1.4rem, 2.6vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.col-label {
+  font-family: var(--cond);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--flap-faint);
+}
+
+.prose {
+  max-width: 68ch;
+  color: var(--flap-dim);
+}
+
+.prose strong {
+  color: var(--flap);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
