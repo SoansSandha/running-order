@@ -108,12 +108,27 @@
 .board-row {
   display: grid;
   grid-template-columns: var(--cols, 92px minmax(0, 1fr) 20ch 11ch 6ch);
-  align-items: center;
-  gap: 0 clamp(10px, 1.6vw, 22px);
+  align-items: stretch;
+  gap: 0;
+}
+
+.board-cols > *,
+.board-row > * {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 clamp(10px, 1.4vw, 18px);
+}
+
+/* The board's hard column rules. */
+.board-cols > * + *,
+.board-row > * + * {
+  border-left: 1px solid var(--rule-soft);
 }
 
 .board-cols {
-  padding: 14px 12px 10px;
+  padding: 14px 0 10px;
   border-bottom: 1px solid var(--rule);
   position: sticky;
   top: 0;
@@ -132,7 +147,7 @@
   position: relative;
   /* Fixed height: the windowing in TrackBoard measures against this. */
   height: var(--row-h, 46px);
-  padding: 0 12px;
+  padding: 0;
   /* The flap card: lit top half, shadowed bottom half, seam across the fold */
   background: linear-gradient(180deg, var(--board-lit) 0 50%, var(--board) 50% 100%);
   border-bottom: 1px solid var(--seam);
@@ -159,15 +174,25 @@
   background: linear-gradient(180deg, #23241f 0 50%, #1c1d19 50% 100%);
 }
 
+.board-row[data-written='true'] {
+  background: linear-gradient(180deg, var(--green-seat-lit) 0 50%, var(--green-seat) 50% 100%);
+}
+
+.board-row[data-written='true'] .slot-to {
+  color: var(--green);
+}
+
+/* 7. Red is reserved for tracks that cannot be carried. Dimming them read as
+   de-emphasis rather than as a warning. */
 .board-row[data-blocked='true'] .row-title {
-  color: var(--flap-faint);
+  color: var(--red);
 }
 
 /* ---- The position gutter: the diff made legible ----------------------- */
 
 .slots {
-  display: flex;
-  align-items: baseline;
+  flex-direction: row !important;
+  align-items: baseline !important;
   gap: 5px;
   font-size: 0.9rem;
 }
@@ -191,7 +216,7 @@
 }
 
 .slot-dash {
-  color: var(--rule);
+  color: var(--flap-faint);
 }
 
 /* ---- Row content ------------------------------------------------------ */
@@ -685,6 +710,20 @@
     --cols: 52px minmax(0, 1fr) 9ch;
   }
 
+  .lever-row {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .lever-row .spacer {
+    display: none;
+  }
+
+  .lever-row .lever,
+  .lever-row .lever-quiet {
+    width: 100%;
+  }
+
   .head {
     padding-top: 24px;
     flex-direction: column;
@@ -771,4 +810,9 @@
   color: var(--flap-faint);
   background: var(--board-deep);
   border-top: 1px solid var(--rule);
+}
+
+/* The track cell stacks a title over its artist on narrow screens. */
+.cell-stack {
+  align-items: flex-start;
 }

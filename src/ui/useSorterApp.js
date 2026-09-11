@@ -100,6 +100,16 @@ export function useSorterApp(auth, demo = null) {
 
   const movingCount = previewRows.filter((row) => row.moves).length
 
+  /**
+   * Rows whose write has already returned. Without this the board cannot
+   * show a committed state, and mid-run a written row looks identical to a
+   * pending one.
+   */
+  const writtenKeys = useMemo(() => {
+    const count = run?.done ?? outcome?.applied ?? 0
+    return new Set(movedKeys.slice(0, count))
+  }, [movedKeys, run?.done, outcome?.applied])
+
   const csvReport = useMemo(() => {
     if (strategyId !== CSV_STRATEGY || !csv?.rows?.length || tracks.length === 0) return null
     return matchCsvToTracks(csv.rows, tracks, { columns: csv.columns, hasHeader: csv.hasHeader })
@@ -349,6 +359,7 @@ export function useSorterApp(auth, demo = null) {
     targetTracks,
     previewRows,
     movingCount,
+    writtenKeys,
     ops,
     run,
     outcome,

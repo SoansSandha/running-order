@@ -111,7 +111,7 @@ export function PlaylistsScreen({ app, auth }) {
               )}
             </span>
 
-            <span role="cell" style={{ minWidth: 0 }}>
+            <span className="cell-stack" role="cell">
               <span className="row-title">{item.name}</span>
               <span className="row-sub row-mobile-sub">
                 {item.editable ? 'Editable' : 'Clone only'} · {formatCount(item.trackCount)}

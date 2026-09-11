@@ -23,7 +23,7 @@ function currentRowHeight() {
   return window.innerWidth <= 680 ? MOBILE_ROW_HEIGHT : DESKTOP_ROW_HEIGHT
 }
 
-export function TrackBoard({ rows, turningKeys, emptyTitle, emptyBody, scrollToKey }) {
+export function TrackBoard({ rows, turningKeys, writtenKeys, emptyTitle, emptyBody, scrollToKey }) {
   const scroller = useRef(null)
   const [rowHeight, setRowHeight] = useState(currentRowHeight)
   const [range, setRange] = useState({ start: 0, end: 60 })
@@ -96,6 +96,7 @@ export function TrackBoard({ rows, turningKeys, emptyTitle, emptyBody, scrollToK
             row={row}
             rowIndex={range.start + offset + 1}
             turning={turningKeys?.has(row.key)}
+            written={writtenKeys?.has(row.key)}
           />
         ))}
 
@@ -105,7 +106,7 @@ export function TrackBoard({ rows, turningKeys, emptyTitle, emptyBody, scrollToK
   )
 }
 
-function BoardRow({ row, rowIndex, turning }) {
+function BoardRow({ row, rowIndex, turning, written }) {
   const { track, from, to, moves, blocked } = row
 
   return (
@@ -113,6 +114,7 @@ function BoardRow({ row, rowIndex, turning }) {
       className={`board-row${turning ? ' is-turning' : ''}`}
       data-moves={moves ? 'true' : 'false'}
       data-blocked={blocked ? 'true' : 'false'}
+      data-written={written ? 'true' : 'false'}
       role="row"
       aria-rowindex={rowIndex}
     >
@@ -129,13 +131,13 @@ function BoardRow({ row, rowIndex, turning }) {
           <>
             <span className="slot-hold num">{from}</span>
             <span className="slot-dash" aria-hidden="true">
-              ·
+              –
             </span>
           </>
         )}
       </span>
 
-      <span role="cell" style={{ minWidth: 0 }}>
+      <span className="cell-stack" role="cell">
         <span className="row-title">{titleOf(track)}</span>
         <span className="row-sub row-mobile-sub">{artistsOf(track)}</span>
       </span>

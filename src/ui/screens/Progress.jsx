@@ -26,7 +26,8 @@ const PHASE_LABEL = {
 }
 
 export function ProgressScreen({ app }) {
-  const { playlist, previewRows, run, outcome, cancelRun, setScreen, undoLast, tracks } = app
+  const { playlist, previewRows, run, outcome, cancelRun, setScreen, undoLast, tracks, writtenKeys } =
+    app
 
   const turning = run?.turning != null ? new Set([run.turning]) : undefined
   const done = run?.done ?? outcome?.applied ?? 0
@@ -41,7 +42,7 @@ export function ProgressScreen({ app }) {
         title={playlist?.name ?? 'Playlist'}
         tally={[
           { label: 'Tracks', value: formatCount(tracks.length) },
-          { label: 'Written', value: formatCount(done), tone: 'amber', flap: true },
+          { label: 'Written', value: formatCount(done), tone: 'green', flap: true },
           { label: 'Of', value: formatCount(total) },
         ]}
       />
@@ -65,6 +66,7 @@ export function ProgressScreen({ app }) {
         <TrackBoard
           rows={previewRows}
           turningKeys={turning}
+          writtenKeys={writtenKeys}
           scrollToKey={run?.turning}
           emptyTitle="Nothing to show"
           emptyBody="This playlist has no tracks."

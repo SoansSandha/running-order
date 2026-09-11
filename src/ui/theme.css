@@ -17,14 +17,18 @@
 
   /* Flap characters — warm cream, the colour of a printed flap under light */
   --flap: #f0e7d4;
-  --flap-dim: #9d968a;
-  --flap-faint: #6a655d;
+  /* Both carry real data, so both clear 4.5:1 against the lit half of a
+     flap card (#1e2225): dim 7.2:1, faint 4.7:1. */
+  --flap-dim: #b4ada0;
+  --flap-faint: #918b80;
 
   /* State, and state only */
   --amber: #f2a71b;
   --amber-deep: #4a3a12;
   --green: #4faa6e;
   --green-deep: #16321f;
+  --green-seat: #1b2a20;
+  --green-seat-lit: #223327;
   --red: #e2705a;
   --red-deep: #3d1c16;
 

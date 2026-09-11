@@ -15,7 +15,7 @@ export function ConnectScreen({ auth }) {
   const connecting = status === 'connecting' || status === 'restoring'
 
   return (
-    <Frame>
+    <Frame fill>
       <Head
         title="Playlist Sorter"
         tally={[{ label: 'Service', value: status === 'restoring' ? 'RESUMING' : 'AWAITING' }]}
