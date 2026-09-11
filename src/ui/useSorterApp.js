@@ -42,8 +42,8 @@ export function useSorterApp(auth, demo = null) {
   const [options, setOptions] = useState(() => defaultOptionsFor('artist'))
   const [csv, setCsv] = useState(null)
 
-  const [run, setRun] = useState(null)
-  const [outcome, setOutcome] = useState(null)
+  const [run, setRun] = useState(demo?.run ?? null)
+  const [outcome, setOutcome] = useState(demo?.outcome ?? null)
   const abort = useRef(null)
 
   /* ---- Derived order ---------------------------------------------------- */

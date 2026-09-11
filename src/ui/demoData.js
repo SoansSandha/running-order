@@ -10,6 +10,7 @@
  */
 
 import { normalizePlaylistItem } from '../model/track.js'
+import { sortTracks } from '../sort/index.js'
 
 const CATALOGUE = [
   ['Radiohead', 'a-radiohead', 'In Rainbows', '2007-10-10', ['15 Step', 'Bodysnatchers', 'Nude', 'Weird Fishes / Arpeggi', 'All I Need', 'Reckoner']],
@@ -102,9 +103,28 @@ function buildTracks() {
   return items.map((item, index) => normalizePlaylistItem(item, index))
 }
 
+/**
+ * A playlist that is already mostly in artist order, with a handful of tracks
+ * out of place. Without this every demo row moves, and the holding state —
+ * one numeral and a dimmed dash — cannot be seen at all.
+ */
+function buildNearlySorted(base) {
+  const arranged = sortTracks(base, { strategy: 'artist', innerOrder: 'addedAt' }).map(
+    (track, index) => ({ ...track, originalIndex: index }),
+  )
+
+  for (const [a, b] of [[2, 37], [9, 28], [14, 45], [21, 33], [5, 50], [17, 41]]) {
+    if (a < arranged.length && b < arranged.length) {
+      ;[arranged[a], arranged[b]] = [arranged[b], arranged[a]]
+    }
+  }
+
+  return arranged.map((track, index) => ({ ...track, originalIndex: index }))
+}
+
 const PLAYLISTS = [
   { id: 'demo-1', name: 'Long Drive', trackCount: 0, editable: true },
-  { id: 'demo-2', name: 'Kitchen, Sunday Morning', trackCount: 48, editable: true },
+  { id: 'demo-2', name: 'Kitchen, Sunday Morning', trackCount: 0, editable: true },
   { id: 'demo-3', name: 'Someone Else’s Mixtape', trackCount: 31, editable: false },
 ]
 
@@ -114,12 +134,16 @@ export function loadDemo() {
   const params = new URLSearchParams(window.location.search)
   if (!params.has('demo')) return null
 
-  const tracks = buildTracks()
+  const shuffled = buildTracks()
+  const nearlySorted = buildNearlySorted(shuffled)
+  const which = Number(params.get('playlist') ?? '1')
+  const tracks = which === 2 ? nearlySorted : shuffled
+
   const playlists = PLAYLISTS.map((item, index) => ({
     ...item,
     description: '',
     imageUrl: null,
-    trackCount: index === 0 ? tracks.length : item.trackCount,
+    trackCount: index < 2 ? shuffled.length : item.trackCount,
     owner: { id: index === 2 ? 'someone' : 'demo-user', displayName: index === 2 ? 'A Friend' : 'Demo' },
     collaborative: false,
     isPublic: false,
@@ -130,8 +154,22 @@ export function loadDemo() {
     me: { id: 'demo-user', displayName: 'Demo', imageUrl: null },
     playlists,
     tracks,
-    playlist: playlists[0],
-    // Lets a capture land straight on one screen.
+    playlist: playlists[which === 2 ? 1 : 0],
+    // Lets a capture land straight on one screen, in a given state.
     screen: params.get('screen') ?? 'playlists',
+    ...progressState(params.get('progress'), tracks),
   }
+}
+
+/** Seeds the progress screen mid-run or finished, for inspection. */
+function progressState(mode, tracks) {
+  if (mode === 'running') {
+    return {
+      run: { phase: 'running', done: 18, total: 45, turning: tracks[23]?.originalIndex ?? null },
+    }
+  }
+  if (mode === 'done') {
+    return { outcome: { kind: 'reordered', applied: 45, total: 45, canUndo: true } }
+  }
+  return {}
 }

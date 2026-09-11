@@ -1,21 +1,22 @@
 # Status
 
-**Last updated:** 2026-09-09
+**Last updated:** 2026-09-10
 
 Design and decisions live in
 [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
-This file tracks only what is built and what is next.
+Product truth lives in [../PRODUCT.md](../PRODUCT.md). This file tracks only
+what is built and what is next.
 
 ---
 
 ## Where things stand
 
-Every layer that does not touch the screen is built and tested. **164 tests
-across 11 files, all passing.** The build is clean and `npm run dev` serves a
-placeholder shell listing the layers and the available sort strategies.
+Every layer is built and the five screens exist. **272 tests across 18 files,
+all passing.** Build clean, lint clean apart from two judged false positives,
+design detector clean.
 
-No Spotify credentials have been used yet, so nothing in the app has been run
-against the live API.
+Nothing has yet run against the live Spotify API — that needs a Client ID
+(see below). The UI can be driven without one via the dev-only demo fixture.
 
 ---
 
@@ -23,62 +24,70 @@ against the live API.
 
 | Layer | Contents | Tests |
 |---|---|---|
-| `src/model/` | `normalize.js`, `track.js` — folds raw playlist items into the flat Track shape every other layer reads | 28 |
-| `src/sort/` | `comparators.js`, `artistGrouped.js`, `albumGrouped.js`, `shuffle.js`, `index.js` — nine strategies behind one registry | 59 |
-| `src/plan/` | `diff.js` — target order to Spotify reorder operations | 18 |
-| `src/api/` | `client.js`, `playlists.js`, `mutations.js` — HTTP client with retry, pagination, reads and writes | 41 |
-| `src/auth/` | `pkce.js`, `spotifyAuth.js` — PKCE handshake and token lifecycle | 18 |
+| `src/model/` | `normalize.js`, `track.js` | 28 |
+| `src/sort/` | Nine strategies behind one registry | 59 |
+| `src/plan/` | `diff.js`, `undo.js`, `execute.js`, `clone.js` | 62 |
+| `src/csv/` | `parse.js`, `detectColumns.js`, `match.js`, `order.js` | 82 |
+| `src/api/` | `client.js`, `playlists.js`, `mutations.js` | 41 |
+| `src/auth/` | `pkce.js`, `spotifyAuth.js`, `useAuth.js` | 18 |
+| `src/ui/` | Five screens, board components, app state | — |
 
-### Worth knowing about what is already in place
+### Worth knowing
 
-- **The diff algorithm is the load-bearing piece.** It uses a
-  longest-increasing-subsequence pass, so re-sorting a nearly-sorted playlist
-  costs one API call per genuinely displaced track rather than one per track.
-  Moving five tracks to the front of a hundred costs five calls. Its index
-  arithmetic is verified by replaying generated operations against 300 random
-  permutations and a 1,000-track playlist.
-- **Sort strategies are pure functions** over plain arrays, with a property
-  test asserting every strategy returns a permutation of its input — same
-  length, same tracks. That single invariant is what guarantees a sort can
-  never lose a track.
-- **The PKCE challenge is pinned to the RFC 7636 worked example**, because
-  drift there shows up only as an opaque handshake failure.
-- **Refresh-token rotation is handled and tested.** Spotify rotates the
-  refresh token on every use; dropping the new one makes the app fail silently
-  about an hour after login.
+- **The diff algorithm is the load-bearing piece.** A
+  longest-increasing-subsequence pass means a re-sort costs one API call per
+  genuinely displaced track, not one per track. Verified by replaying
+  generated operations against 300 random permutations and a 1,000-track
+  playlist.
+- **Every sort strategy has a property test** asserting it returns a
+  permutation of its input. That invariant is what makes "a sort can never
+  lose a track" a guarantee.
+- **CSV title folding is deliberately conservative.** `(feat. X)` and
+  remaster tags are dropped; `(Live)` and `(Remix)` are kept. Over-normalizing
+  invents matches that get applied silently, while under-normalizing only
+  sends a row to the fuzzy tier where a human confirms it.
+- **Refresh-token rotation is handled and tested** — dropping a rotated token
+  fails silently about an hour after login.
+
+---
+
+## The interface
+
+The visual world is a **Solari split-flap departure board**, chosen through
+the design skill's direction roll (seed `03dffa4e`, candidate 5 of seven
+grounded directions). The full contract is in
+`.impeccable/surfaces/src-app-jsx.md`.
+
+The idea: a playlist is an ordered list whose whole purpose is that it
+rewrites itself, so the rewrite is the event. Preview shows the scheduled
+order against the current one in a two-numeral gutter; Progress is the same
+board turning over, with each row flapping as its own write returns — the
+motion is the progress, not decoration beside it.
+
+| Screen | State |
+|---|---|
+| Connect | Client ID, copyable redirect URI, setup notes |
+| Playlists | Board of destinations, editable vs clone-only |
+| Sort | Strategy list, per-strategy options, CSV mapping and reconciliation, live peek at the resulting order |
+| Preview | The diff board, with writes and estimated time |
+| Progress | The board turning over, cancel, undo, outcome |
+
+### Seeing it without Spotify
+
+`npm run dev`, then append `?demo=1` — a synthetic 54-track playlist, gated on
+`import.meta.env.DEV` so it is tree-shaken from production. Add
+`&screen=preview` (or `sort`, `playlists`) to land on one directly.
 
 ---
 
 ## Not built
 
-In the order it should be picked up.
-
 | # | Work | Notes |
 |---|---|---|
-| 1 | **The five screens** — Connect, Playlists, Sort, Preview, Progress | Design direction was being established when this session stopped. See below |
-| 2 | **`plan/undo.js`** | Snapshot before write, restore after. Designed in §9.1, not yet written |
-| 3 | **The execute loop** | Walks the operation list, keeps a local mirror in lockstep, threads `snapshot_id` between calls, reports progress, supports cancel |
-| 4 | **Clone-and-sort** | Create, then bulk-add in 100-URI chunks. `createPlaylist` and `addTracksInChunks` already exist and are tested; the flow around them is not written |
-| 5 | **`src/csv/`** | `parse.js`, `detectColumns.js`, `match.js`, `order.js`. Fully designed in §7. PapaParse is already installed |
-| 6 | **Dry-run mode** | Logs the operation list without sending it, for checking against a throwaway playlist |
-
----
-
-## Where the UI work stopped
-
-The `impeccable` design skill was mid-interview. Three answers were captured
-and are now recorded as D7, D8 and D9 in the design doc:
-
-- **Audience:** the author alone, so the Connect screen stays terse.
-- **Devices:** desktop and mobile equally, so the before/after diff needs two
-  real layouts rather than one squeezed into the other.
-- **Scale:** ~400 tracks today, expected to grow, so track lists are windowed
-  from the start.
-
-**To resume:** the skill's `init` step still needs `PRODUCT.md` written from
-those answers, after which `reference/new-work.md` establishes the visual
-world. Nothing else is blocked on it — items 2 through 6 above are all
-independent of the UI and could be built first.
+| 1 | **Accepting fuzzy CSV suggestions in the UI** | `buildCsvOrder` already takes `acceptedSuggestions` and it is tested; the review UI for accepting them per-row is not built, so near-miss rows currently stay unmatched |
+| 2 | **Resuming an interrupted run** | Designed in §9.1. The undo snapshot is written and restorable, but the "a tab died mid-run" detection on next load is not wired |
+| 3 | **Dry-run output detail** | The dry run reports a count; it does not yet list the operations |
+| 4 | **Live API verification** | Nothing has touched real Spotify. First run against a real playlist is the real test |
 
 ---
 
@@ -86,12 +95,11 @@ independent of the UI and could be built first.
 
 A one-time setup on the Spotify Developer Dashboard, not yet done:
 
-1. Create an app and copy its **Client ID** (there is no client secret in the
-   PKCE flow, so none is needed).
-2. Register the redirect URI **exactly** as `http://127.0.0.1:5173/` — note
-   the trailing slash, and note that `localhost` is rejected. Anything
-   deployed must be HTTPS.
-3. The app stays in Development Mode, which is sufficient for personal use.
+1. Create an app and copy its **Client ID** (PKCE needs no client secret).
+2. Register the redirect URI **exactly** as `http://127.0.0.1:5173/` — trailing
+   slash included. `localhost` is rejected outright; anything deployed must be
+   HTTPS.
+3. The app stays in Development Mode, which is enough for one user.
 
 ---
 
@@ -104,3 +112,10 @@ A one-time setup on the Spotify Developer Dashboard, not yet done:
 | `npm run test:watch` | Watch mode |
 | `npm run lint` | Oxlint over `src` |
 | `npm run build` | Production build |
+
+### Capturing screenshots
+
+Chrome on Windows clamps its window to a 500px minimum, so a
+`--window-size=390` capture silently renders a 500px layout and crops it. For
+a true phone-width render, load the app in a 390px-wide iframe and capture
+that frame instead.
