@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-11 · **HEAD:** `e85fa0a`
+**Last updated:** 2026-09-11 · **HEAD:** `dcc51b6`
 
 Design and decisions: [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -15,10 +15,11 @@ This file tracks only what is built and what is next.
 All logic layers and all five screens are built. **273 tests across 18 files,
 all passing.** Build clean, design detector clean, working tree clean.
 
-Round three's three regressions are fixed and both of its partials are closed.
-A fourth review pass was in flight when this was written — check its verdict
-before assuming the build is settled. `DESIGN.md` has still never been
-written, which the direction contract's FINISH line requires.
+Round four scored every fix resolved with no new regressions, and left one
+defect open, which is now fixed. A fifth pass was in flight when this was
+written — check its verdict before assuming the build is settled. `DESIGN.md`
+has still never been written, which the direction contract's FINISH line
+requires.
 
 Nothing has run against the live Spotify API. That needs a Client ID.
 
@@ -94,7 +95,8 @@ Four passes have run against this build.
 | 1 | `recapture` — the screenshots predated the last write to the visual system, so nothing shown was the real artifact |
 | 2 | `fix` — eight material defects |
 | 3 | `fix` — six of eight resolved, two partial, **three regressions introduced by the fix batch itself** |
-| 4 | In flight when this was written |
+| 4 | `fix` — all six resolved, **no new regressions**, one legacy defect found |
+| 5 | In flight when this was written |
 
 **Everything round 3 raised is now addressed:**
 
@@ -110,6 +112,21 @@ Four passes have run against this build.
   screens keep it.
 - Blocked-row red was unproven — a CSS rule is not evidence. `&focus=blocked`
   lands the board on them; `blocked.png` shows it.
+
+**Round 4's one finding is also fixed.** The POS gutter was top-aligned
+against centred rows on every board screen, a 12px lift, and it had been there
+since the round-two batch. `.slots` flipped itself to `flex-direction: row`,
+which reinterpreted the shared cell rule's `justify-content: center` as
+horizontal and handed the vertical axis to `align-items: baseline` — and
+baseline flushes to the top. The slot spans now baseline-align to each other
+inside `.slots-inner` while the cell stays a column, so it centres like every
+other cell. Verified by measuring slot and title midpoints in the live page
+rather than by eye.
+
+Worth remembering: this was the *same* failure as the Playlists track cell — a
+direction flip silently reinterpreting alignment. Fixed in one place, missed
+in the other. If a cell lays out horizontally, say `flex-direction: row`
+explicitly.
 
 ### Deferred by agreement: the ceiling notes
 
