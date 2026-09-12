@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatCount } from '../format.js'
 import { BoardEmpty, Chip, Frame, Head, Meter, Notice, QuietLever } from '../components/chrome.jsx'
+import { UnlitField } from '../components/UnlitField.jsx'
 
 export function PlaylistsScreen({ app, auth }) {
   const { playlists, busy, error, loadPlaylists, openPlaylist, me } = app
@@ -128,6 +129,8 @@ export function PlaylistsScreen({ app, auth }) {
             </span>
           </button>
         ))}
+
+        <UnlitField cells={4} />
       </div>
     </Frame>
   )

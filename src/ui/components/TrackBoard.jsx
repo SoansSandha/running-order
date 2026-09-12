@@ -13,6 +13,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { artistsOf, formatAdded, formatDuration, titleOf } from '../format.js'
 import { FlapText } from './Flap.jsx'
 import { BoardEmpty } from './chrome.jsx'
+import { UnlitField } from './UnlitField.jsx'
 
 const DESKTOP_ROW_HEIGHT = 46
 const MOBILE_ROW_HEIGHT = 58
@@ -101,6 +102,8 @@ export function TrackBoard({ rows, turningKeys, writtenKeys, emptyTitle, emptyBo
         ))}
 
         <div style={{ height: Math.max(0, (rows.length - range.end) * rowHeight) }} />
+
+        <UnlitField cells={5} />
       </div>
     </>
   )

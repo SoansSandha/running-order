@@ -138,23 +138,52 @@
 }
 
 .board-scroll {
-  --band: var(--row-h, 46px);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Unlit flaps fill the rest of the frame: a board does not run out into
-     dark page. The bands continue the row rhythm, so they register with the
-     real rows seated above them. */
+  display: flex;
+  flex-direction: column;
+}
+
+.board-scroll > * {
+  flex: none;
+}
+
+/*
+ * Unlit flaps carry the rest of the frame. A grid, not a painted background:
+ * an unlit flap still occupies its column module, so the hard vertical rules
+ * continue through it. Sits above the last seated row's shadow on a clean
+ * seam, rather than letting it bleed into the first band.
+ */
+.unlit-field {
+  --band: var(--row-h, 46px);
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--cols, 104px minmax(0, 1fr) 20ch 13ch 8ch);
+  min-height: var(--band);
+  border-top: 1px solid var(--seam);
+  background-color: #15181a;
   background-image: repeating-linear-gradient(
     180deg,
     #1a1d20 0,
-    #1a1d20 calc(var(--band) / 2),
+    #1a1d20 calc(var(--band) / 2 - 1px),
+    var(--seam) calc(var(--band) / 2 - 1px),
+    var(--seam) calc(var(--band) / 2),
     #15181a calc(var(--band) / 2),
     #15181a calc(var(--band) - 1px),
     var(--seam) calc(var(--band) - 1px),
     var(--seam) var(--band)
   );
+}
+
+.board-scroll > .unlit-field {
+  flex: 1 0 auto;
+}
+
+.unlit-field > * + * {
+  border-left: 1px solid var(--rule-soft);
 }
 
 .board-row {
