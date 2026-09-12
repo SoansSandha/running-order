@@ -87,9 +87,23 @@ export function useAuth() {
     [applyTokens],
   )
 
+  /**
+   * The callback runs exactly once per page load.
+   *
+   * StrictMode mounts, unmounts, and remounts in development. The
+   * authorization code is single-use and the query string is cleared the
+   * moment it is read, so a second invocation finds nothing and the first
+   * one's result must not be discarded as though the component had really
+   * gone away. Guarding on a ref covers both: the second pass returns
+   * immediately, and the first pass keeps its tokens.
+   */
+  const callbackHandled = useRef(false)
+
   // Resume: handle a redirect back from Spotify, or restore a stored session.
   useEffect(() => {
-    let cancelled = false
+    if (callbackHandled.current) return
+    callbackHandled.current = true
+
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
     const returnedState = params.get('state')
@@ -125,11 +139,9 @@ export function useAuth() {
             redirectUri: currentRedirectUri(),
             codeVerifier: verifier,
           })
-          if (cancelled) return
           applyTokens(next)
           setStatus('connected')
         } catch (failure) {
-          if (cancelled) return
           setError(failure.message)
           setStatus('error')
         }
@@ -144,11 +156,9 @@ export function useAuth() {
             clientId: clientIdRef.current,
             refreshToken: storedRefresh,
           })
-          if (cancelled) return
           applyTokens(next)
           setStatus('connected')
         } catch {
-          if (cancelled) return
           // A stale refresh token is not an error worth showing on arrival.
           write(globalThis.localStorage, REFRESH_KEY, null)
           setStatus('idle')
@@ -157,9 +167,6 @@ export function useAuth() {
     }
 
     resume()
-    return () => {
-      cancelled = true
-    }
   }, [applyTokens])
 
   // Refresh ahead of expiry so a long reorder never stalls mid-run.

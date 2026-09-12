@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-12 · **HEAD:** `146d53c`
+**Last updated:** 2026-09-12 · **HEAD:** `see git log`
 
 Design and decisions: [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -193,6 +193,33 @@ guards now exist, so this should not be reachable:
   fallback to 5174 changes the origin and breaks the match the same way.
 - The Connect screen checks its own origin, names the address to use instead,
   and disables the button when the current one cannot work.
+
+### Confirmed working
+
+The consent screen has been reached and accepted with a Client ID from an app
+owned by another account, with this account added under User Management. So
+the borrowed-app arrangement is settled, not theoretical: **the Premium
+requirement is on creating the app, and does not extend to using it.** The
+four requested scopes are exactly the four the app declares.
+
+### One bug the test suite could not have caught
+
+The first live attempt hung on "Connecting" after a successful consent. Cause:
+React StrictMode mounts, unmounts and remounts in development; the callback
+effect cleared the query string as soon as it read the code, so the second
+invocation found nothing, and a `cancelled` flag set by the simulated unmount
+threw away the first invocation's successful token exchange. The
+authorization code is single-use, so the attempt was spent.
+
+The callback now runs exactly once per page load, guarded on a ref, and its
+result is not discarded. Verified by instrumenting both counters against the
+live dev server: `effectRuns=2, resumeRuns=1`.
+
+Worth remembering: 278 tests did not catch this and could not have. It is a
+React lifecycle interaction with a single-use credential, reachable only by
+running the real flow. The same is true of the `fields=` projection on the
+track fetch and of any real rate-limit behaviour — all of it is tested against
+mocks and nothing else.
 
 ### What failure looks like
 
