@@ -18,7 +18,7 @@ describe('reorderTrack', () => {
     await reorderTrack(client, 'p1', { rangeStart: 5, insertBefore: 2, rangeLength: 1 }, 'snap1')
     expect(client.calls[0]).toMatchObject({
       method: 'PUT',
-      path: '/playlists/p1/tracks',
+      path: '/playlists/p1/items',
       body: { range_start: 5, insert_before: 2, range_length: 1, snapshot_id: 'snap1' },
     })
   })
@@ -32,6 +32,7 @@ describe('reorderTrack', () => {
   test('defaults rangeLength to a single track', async () => {
     const client = recorder([{ snapshot_id: 's' }])
     await reorderTrack(client, 'p1', { rangeStart: 3, insertBefore: 0 }, 's0')
+    expect(client.calls[0].path).toBe('/playlists/p1/items')
     expect(client.calls[0].body.range_length).toBe(1)
   })
 })

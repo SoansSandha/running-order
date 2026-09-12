@@ -24,7 +24,7 @@ const playlist = (id, name, ownerId, extra = {}) => ({
   snapshot_id: `snap-${id}`,
   images: [{ url: `https://img/${id}` }],
   owner: { id: ownerId, display_name: ownerId },
-  tracks: { total: 10 },
+  items: { total: 10 },
   ...extra,
 })
 
@@ -104,6 +104,21 @@ describe('listEditablePlaylists', () => {
     expect(result.editable).toBe(true)
   })
 
+  test('reads the track count from `items`, which is what the API returns', async () => {
+    const client = fakeClient({
+      '/me/playlists': { items: [playlist('p1', 'Mine', 'u1')], next: null },
+    })
+    const [result] = await listEditablePlaylists(client, 'u1')
+    expect(result.trackCount).toBe(10)
+  })
+
+  test('still reads a legacy `tracks` count, so an older shape is not zeroed', async () => {
+    const legacy = { ...playlist('p1', 'Mine', 'u1'), items: undefined, tracks: { total: 7 } }
+    const client = fakeClient({ '/me/playlists': { items: [legacy], next: null } })
+    const [result] = await listEditablePlaylists(client, 'u1')
+    expect(result.trackCount).toBe(7)
+  })
+
   test('keeps the snapshot id, which every write has to quote', async () => {
     const client = fakeClient({
       '/me/playlists': { items: [playlist('p1', 'Mine', 'u1')], next: null },
@@ -135,9 +150,15 @@ describe('fetchPlaylistTracks', () => {
     },
   })
 
+  test('reads from the items endpoint, not the retired tracks one', async () => {
+    const client = fakeClient({ '/playlists/p1/items': { items: [], next: null } })
+    await fetchPlaylistTracks(client, 'p1')
+    expect(client.calls[0].path).toBe('/playlists/p1/items')
+  })
+
   test('returns normalized tracks numbered by playlist position', async () => {
     const client = fakeClient({
-      '/playlists/p1/tracks': { items: [item('t1', 'One'), item('t2', 'Two')], next: null },
+      '/playlists/p1/items': { items: [item('t1', 'One'), item('t2', 'Two')], next: null },
     })
     const tracks = await fetchPlaylistTracks(client, 'p1')
     expect(tracks.map((t) => [t.name, t.originalIndex])).toEqual([['One', 0], ['Two', 1]])
@@ -145,18 +166,18 @@ describe('fetchPlaylistTracks', () => {
 
   test('numbers continue across page boundaries', async () => {
     const client = fakeClient({
-      '/playlists/p1/tracks': {
+      '/playlists/p1/items': {
         items: [item('t1', 'One')],
-        next: 'https://api.spotify.com/v1/playlists/p1/tracks?offset=1',
+        next: 'https://api.spotify.com/v1/playlists/p1/items?offset=1',
       },
-      'https://api.spotify.com/v1/playlists/p1/tracks': { items: [item('t2', 'Two')], next: null },
+      'https://api.spotify.com/v1/playlists/p1/items': { items: [item('t2', 'Two')], next: null },
     })
     const tracks = await fetchPlaylistTracks(client, 'p1')
     expect(tracks.map((t) => t.originalIndex)).toEqual([0, 1])
   })
 
   test('requests a trimmed field projection rather than the full payload', async () => {
-    const client = fakeClient({ '/playlists/p1/tracks': { items: [], next: null } })
+    const client = fakeClient({ '/playlists/p1/items': { items: [], next: null } })
     await fetchPlaylistTracks(client, 'p1')
     const { query } = client.calls[0].options
     expect(query.fields).toContain('added_at')

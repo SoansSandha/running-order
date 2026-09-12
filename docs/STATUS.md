@@ -202,6 +202,20 @@ the borrowed-app arrangement is settled, not theoretical: **the Premium
 requirement is on creating the app, and does not extend to using it.** The
 four requested scopes are exactly the four the app declares.
 
+### Spotify moved the playlist contents endpoint
+
+Found on the first live run, from the app's own request log. The playlist
+object returned by `/me/playlists` carries its track count as **`items.total`**,
+not `tracks.total`, and advertises its contents at
+**`/playlists/{id}/items`**. The older `/playlists/{id}/tracks` answers `403
+Forbidden` for this app.
+
+Both symptoms had one cause: every playlist read as 0 tracks because the
+count was read from a field that no longer exists, and opening one failed
+because the endpoint had moved. Reads and writes now target `/items`, kept in
+`src/api/endpoints.js` so a path Spotify has moved once can be moved again in
+one place. The count reads `items.total` and falls back to `tracks.total`.
+
 ### One bug the test suite could not have caught
 
 The first live attempt hung on "Connecting" after a successful consent. Cause:

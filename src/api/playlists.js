@@ -5,6 +5,7 @@
  */
 
 import { normalizePlaylistItem } from '../model/track.js'
+import { playlistItemsPath, playlistTrackCount } from './endpoints.js'
 
 const PLAYLIST_PAGE_SIZE = 50
 const TRACK_PAGE_SIZE = 100
@@ -63,7 +64,7 @@ export async function listEditablePlaylists(client, currentUserId, { onProgress 
     name: item.name,
     description: item.description ?? '',
     imageUrl: item.images?.[0]?.url ?? null,
-    trackCount: item.tracks?.total ?? 0,
+    trackCount: playlistTrackCount(item),
     owner: { id: item.owner?.id ?? null, displayName: item.owner?.display_name || item.owner?.id || '' },
     collaborative: item.collaborative === true,
     isPublic: item.public === true,
@@ -79,7 +80,7 @@ export async function getPlaylistSnapshot(client, playlistId) {
 }
 
 export async function fetchPlaylistTracks(client, playlistId, { onProgress } = {}) {
-  const items = await fetchAllPages(client, `/playlists/${playlistId}/tracks`, {
+  const items = await fetchAllPages(client, playlistItemsPath(playlistId), {
     query: { limit: TRACK_PAGE_SIZE, fields: TRACK_FIELDS },
     onProgress,
   })
