@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '../api/client.js'
+import { recordApiEvent } from '../ui/apiLog.js'
 import { createCodeChallenge, createCodeVerifier, randomState } from './pkce.js'
 import {
   buildAuthorizeUrl,
@@ -74,6 +75,7 @@ export function useAuth() {
   const client = useMemo(
     () =>
       createClient({
+        onEvent: recordApiEvent,
         getAccessToken: () => tokensRef.current?.accessToken ?? '',
         refreshAccessToken: async () => {
           const id = clientIdRef.current

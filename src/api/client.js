@@ -14,11 +14,12 @@ const BACKOFF_BASE_MS = 500
 const MAX_ATTEMPTS = 3
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, body = null } = {}) {
+  constructor(message, { status = 0, body = null, url = null } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    this.url = url
   }
 }
 
@@ -45,6 +46,7 @@ export function createClient({
   fetch: fetchImpl = globalThis.fetch,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   maxAttempts = MAX_ATTEMPTS,
+  onEvent,
 }) {
   async function request(path, { method = 'GET', body, query, signal } = {}) {
     const url = buildUrl(path, query)
@@ -67,7 +69,11 @@ export function createClient({
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       })
 
-      if (response.ok) return parseBody(response)
+      if (response.ok) {
+        const payload = await parseBody(response)
+        onEvent?.({ url, method, status: response.status, body: payload })
+        return payload
+      }
 
       if (response.status === 401) {
         if (refreshed) {
@@ -108,9 +114,11 @@ export function createClient({
 
       // 4xx other than 401/429: retrying cannot help.
       const errorBody = await parseBody(response)
+      onEvent?.({ url, method, status: response.status, body: errorBody })
       throw new ApiError(describe(errorBody, response.status), {
         status: response.status,
         body: errorBody,
+        url,
       })
     }
   }
@@ -153,5 +161,6 @@ function readRetryAfter(response) {
 }
 
 function describe(body, status) {
-  return body?.error?.message ?? body?.error_description ?? `Spotify request failed (${status})`
+  const reason = body?.error?.message ?? body?.error_description
+  return reason ? `${reason} (${status})` : `Spotify request failed (${status})`
 }

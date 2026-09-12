@@ -971,3 +971,79 @@
 .suggestion-actions .option {
   border: 1px solid var(--rule);
 }
+
+/* ---- Dev-only request log (?debug=1) ---------------------------------- */
+
+.api-log {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  width: min(560px, 100vw);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  background: var(--board-deep);
+  border: 1px solid var(--rule);
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.api-log-toggle {
+  width: 100%;
+  text-align: left;
+  font-family: var(--cond);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  color: var(--amber);
+  background: var(--board-lit);
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+
+.api-log-body {
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.api-log-body details {
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.api-log-body summary {
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--flap-dim);
+  word-break: break-all;
+}
+
+.api-log-status {
+  display: inline-block;
+  min-width: 4ch;
+  color: var(--green);
+}
+
+.api-log-status[data-bad='true'] {
+  color: var(--red);
+}
+
+.api-log-body pre {
+  margin: 0;
+  padding: 8px 12px 12px;
+  max-height: 40vh;
+  overflow: auto;
+  color: var(--flap-dim);
+  background: var(--board);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.api-log-empty {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--flap-faint);
+}

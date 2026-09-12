@@ -4,6 +4,8 @@ import { PlaylistsScreen } from './ui/screens/Playlists.jsx'
 import { PreviewScreen } from './ui/screens/Preview.jsx'
 import { ProgressScreen } from './ui/screens/Progress.jsx'
 import { SortScreen } from './ui/screens/Sort.jsx'
+import { enableApiLog } from './ui/apiLog.js'
+import { ApiLog } from './ui/components/ApiLog.jsx'
 import { loadDemo } from './ui/demoData.js'
 import { useSorterApp } from './ui/useSorterApp.js'
 
@@ -11,14 +13,32 @@ import { useSorterApp } from './ui/useSorterApp.js'
 // content without a Spotify connection. Tree-shaken from production builds.
 const demo = import.meta.env.DEV ? loadDemo() : null
 
+// ?debug=1 records what the app sends and receives, so a bare "Forbidden"
+// can be traced to a request. Dev only.
+const debugging =
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).has('debug')
+enableApiLog(debugging)
+
 export default function App() {
   const auth = useAuth()
   const app = useSorterApp(auth, demo)
 
-  if (!auth.isConnected && !demo) return <ConnectScreen auth={auth} />
+  const screen = !auth.isConnected && !demo
+    ? <ConnectScreen auth={auth} />
+    : app.screen === 'sort'
+      ? <SortScreen app={app} />
+      : app.screen === 'preview'
+        ? <PreviewScreen app={app} />
+        : app.screen === 'progress'
+          ? <ProgressScreen app={app} />
+          : <PlaylistsScreen app={app} auth={auth} />
 
-  if (app.screen === 'sort') return <SortScreen app={app} />
-  if (app.screen === 'preview') return <PreviewScreen app={app} />
-  if (app.screen === 'progress') return <ProgressScreen app={app} />
-  return <PlaylistsScreen app={app} auth={auth} />
+  return (
+    <>
+      {screen}
+      {debugging ? <ApiLog /> : null}
+    </>
+  )
 }
