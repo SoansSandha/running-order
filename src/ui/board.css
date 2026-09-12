@@ -804,10 +804,6 @@
     grid-column: 2;
   }
 
-  .pl-row {
-    --cols: 64px minmax(0, 1fr) 11ch;
-  }
-
   .lever-row {
     flex-wrap: wrap;
     align-items: stretch;
