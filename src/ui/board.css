@@ -138,10 +138,23 @@
 }
 
 .board-scroll {
+  --band: var(--row-h, 46px);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Unlit flaps fill the rest of the frame: a board does not run out into
+     dark page. The bands continue the row rhythm, so they register with the
+     real rows seated above them. */
+  background-image: repeating-linear-gradient(
+    180deg,
+    #1a1d20 0,
+    #1a1d20 calc(var(--band) / 2),
+    #15181a calc(var(--band) / 2),
+    #15181a calc(var(--band) - 1px),
+    var(--seam) calc(var(--band) - 1px),
+    var(--seam) var(--band)
+  );
 }
 
 .board-row {
@@ -669,6 +682,7 @@
 /* ---- Playlist board rows ---------------------------------------------- */
 
 .pl-cols,
+.pl-scroll,
 .pl-row {
   --cols: 64px minmax(0, 1fr) 14ch 11ch;
   --row-h: 58px;
@@ -728,7 +742,8 @@
     --cols: 88px minmax(0, 1fr) 8ch;
   }
 
-  .board-row {
+  .board-row,
+  .board-scroll {
     --row-h: 58px;
   }
 
@@ -753,17 +768,24 @@
   }
 
   .lever-row {
-    flex-direction: column-reverse;
+    flex-wrap: wrap;
     align-items: stretch;
+    gap: 10px;
+    padding: 12px 0 16px;
   }
 
   .lever-row .spacer {
     display: none;
   }
 
-  .lever-row .lever,
+  .lever-row .lever {
+    order: -1;
+    flex: 1 0 100%;
+  }
+
   .lever-row .lever-quiet {
-    width: 100%;
+    /* Two share a line; one alone grows to fill it. */
+    flex: 1 1 40%;
   }
 
   .head {

@@ -86,7 +86,7 @@ export function PlaylistsScreen({ app, auth }) {
         <span className="col-label">Tracks</span>
       </div>
 
-      <div className="board-scroll" role="table" aria-label="Your playlists">
+      <div className="board-scroll pl-scroll" role="table" aria-label="Your playlists">
         {shown.length === 0 && !busy ? (
           <BoardEmpty title={playlists.length ? 'Nothing matches' : 'No playlists yet'}>
             {playlists.length
