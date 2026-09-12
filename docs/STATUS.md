@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-10 · **HEAD:** `076fd39`
+**Last updated:** 2026-09-11 · **HEAD:** `e85fa0a`
 
 Design and decisions: [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -12,13 +12,13 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **272 tests across 18 files,
+All logic layers and all five screens are built. **273 tests across 18 files,
 all passing.** Build clean, design detector clean, working tree clean.
 
-Two things are explicitly *not* finished, and both are recorded below: the
-design review's last pass came back `fix` with three regressions my own fix
-batch introduced, and `DESIGN.md` has never been written, which the direction
-contract's FINISH line requires.
+Round three's three regressions are fixed and both of its partials are closed.
+A fourth review pass was in flight when this was written — check its verdict
+before assuming the build is settled. `DESIGN.md` has still never been
+written, which the direction contract's FINISH line requires.
 
 Nothing has run against the live Spotify API. That needs a Client ID.
 
@@ -31,7 +31,7 @@ Nothing has run against the live Spotify API. That needs a Client ID.
 | `src/model/` | `normalize.js`, `track.js` | 28 |
 | `src/sort/` | Nine strategies behind one registry | 59 |
 | `src/plan/` | `diff.js`, `undo.js`, `execute.js`, `clone.js` | 62 |
-| `src/csv/` | `parse.js`, `detectColumns.js`, `match.js`, `order.js` | 82 |
+| `src/csv/` | `parse.js`, `detectColumns.js`, `match.js`, `order.js` | 83 |
 | `src/api/` | `client.js`, `playlists.js`, `mutations.js` | 41 |
 | `src/auth/` | `pkce.js`, `spotifyAuth.js`, `useAuth.js` | 18 |
 | `src/ui/` | Five screens, board components, app state | — |
@@ -76,6 +76,8 @@ each row inking green as its own write returns.
 | `/?demo=1&screen=preview&playlist=2` | Preview with 12 moving against 42 holding |
 | `/?demo=1&screen=progress&playlist=2&progress=running` | Progress mid-run at 18 of 45 |
 | `/?demo=1&screen=progress&progress=done` | Progress, finished |
+| `/?demo=1&screen=preview&playlist=2&focus=blocked` | Preview scrolled to the blocked tracks, proving their red treatment |
+| `/?demo=1&screen=sort&csv=1` | Sort with a seeded CSV, reconciliation report, and a fuzzy suggestion to accept |
 
 `playlist=2` is a nearly-sorted playlist; `playlist=1` (default) is fully
 shuffled so every row moves. Demo data is gated on `import.meta.env.DEV` and
@@ -83,60 +85,46 @@ tree-shaken from production.
 
 ---
 
-## Open: design review round 3 came back `fix`
+## Design review history
 
-Three review cycles have run. Round 1 refused to score the build
-(`recapture` — my screenshots predated the last write to the visual system).
-Round 2 returned eight material fixes. Round 3 scored those fixes and found
-new regressions.
+Four passes have run against this build.
 
-**Round 3 verdict: 6 of 8 resolved, 2 partial, 3 regressions introduced by
-the fix batch itself.** In priority order:
+| Round | Outcome |
+|---|---|
+| 1 | `recapture` — the screenshots predated the last write to the visual system, so nothing shown was the real artifact |
+| 2 | `fix` — eight material defects |
+| 3 | `fix` — six of eight resolved, two partial, **three regressions introduced by the fix batch itself** |
+| 4 | In flight when this was written |
 
-### 1. Playlists draws two misaligned column grids
+**Everything round 3 raised is now addressed:**
 
-`--cols` is set on `.pl-row` only (`src/ui/board.css`, the `.pl-row` block),
-so `.board-cols` on that screen falls back to the five-column default. The
-hard column rules added in round 2 made the divergence structural: header
-rules land at roughly x=1032 and x=1215 while row rules land at x=1172 and
-x=1300, and the OWNER label sits ~145px left of its values.
+- Playlists drew two misaligned column grids (`--cols` sat on `.pl-row`
+  only). One declaration now governs header and rows.
+- The Playlists track cell stacked and bottom-aligned, because the shared
+  cell rule makes every cell a column flex box and silently reinterprets an
+  inline `justify-content: flex-end` as "bottom". Replaced with `.cell-end`,
+  which states its direction.
+- Sort clipped card text against a hard edge. It flows normally again with a
+  sticky lever row and a gradient above it, so content dissolves into the bar.
+  The board ground moved from `.frame[data-fill]` onto `.frame` so flowing
+  screens keep it.
+- Blocked-row red was unproven — a CSS rule is not evidence. `&focus=blocked`
+  lands the board on them; `blocked.png` shows it.
 
-**Fix:** set `--cols` and `--row-h` on a shared parent, or on `.board-cols`
-for that screen, so one grid governs both.
+### Deferred by agreement: the ceiling notes
 
-### 2. Playlists TRACKS cell stacks and bottom-aligns
+Character-cell flapping is confined to two numerals rather than every string;
+the staggered cascade the contract names never fires (one row turns at a
+time); empty board ground is dead space rather than unlit blank flaps. The
+reviewer agreed these are ceiling, not material defects, and said to
+reconsider them only once Playlists was square. Playlists is now square, so
+these are the natural next ambition if the world is worth pushing further.
 
-Round 2 made every `.board-row > *` a column flex box. The TRACKS cell in
-`src/ui/screens/Playlists.jsx` carries an inline
-`display:flex; align-items:center; justify-content:flex-end`, which overrides
-neither `flex-direction: column` nor the axis meaning — so `flex-end` now
-pushes content to the *bottom* and the CLONE ONLY chip sits *under* the count.
+### Still open
 
-**Fix:** give that cell an explicit `flex-direction: row`.
-
-### 3. Sort's scroll region clips mid-sentence with no affordance
-
-`Frame fill` + `.board-scroll` on Sort cuts SHUFFLE's description at "The same
-seed / always shuffles the same way", and the HOW IT STARTS list cuts through
-a row, each against a hard edge. On the diff board a half-row reads as a flap
-mid-turn; on a card list it reads as broken layout. Needs a fade, rule, or
-partial-row cue.
-
-### Also open
-
-- **Blocked-row red is unproven.** The rule exists
-  (`.board-row[data-blocked='true'] .row-title { color: var(--red) }`) but no
-  capture shows it: the two blocked tracks sit near positions 53–54 and every
-  Preview capture is windowed to rows 1–10. Needs one capture scrolled to
-  them. A rule in CSS is not evidence.
-- **Ceiling notes, deferred by agreement.** Character-cell flapping is
-  confined to two numerals rather than every string; the staggered cascade
-  the contract names never fires (one row turns at a time); empty board ground
-  is dead space rather than unlit blank flaps. The reviewer agreed these are
-  ceiling, not material defects. Reconsider only after Playlists is square.
-- **`DESIGN.md` has never been written.** The contract's FINISH line requires
-  it, written at finish from the built world by the shipped documenter. Until
-  it exists this build is incomplete by its own terms.
+**`DESIGN.md` has never been written.** The contract's FINISH line requires
+it, written at finish from the built world by the shipped documenter. Until
+it exists this build is incomplete by its own terms.
 
 ---
 
@@ -144,10 +132,9 @@ partial-row cue.
 
 | # | Work | Notes |
 |---|---|---|
-| 1 | Accepting fuzzy CSV suggestions in the UI | `buildCsvOrder` already takes `acceptedSuggestions` and it is tested; the per-row accept/reject UI does not exist, so near-miss rows currently stay unmatched |
-| 2 | Resuming an interrupted run | Designed in §9.1. The undo snapshot is written and restorable, but "a tab died mid-run" detection on next load is not wired |
-| 3 | Dry-run detail | Reports a count; does not list the operations |
-| 4 | Live API verification | Nothing has touched real Spotify. First run against a real playlist is the real test |
+| 1 | Resuming an interrupted run | Designed in §9.1. The undo snapshot is written and restorable, but "a tab died mid-run" detection on next load is not wired |
+| 2 | Dry-run detail | Reports a count; does not list the operations |
+| 3 | Live API verification | Nothing has touched real Spotify. First run against a real playlist is the real test |
 
 ---
 
@@ -205,10 +192,9 @@ find src -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.css" \) \
 
 ## Suggested order when picking back up
 
-1. The two Playlists regressions — it is the screen the tool opens on, and
-   both are on the fix batch's own account.
-2. Sort's scroll clip.
-3. Recapture, including one Preview scrolled to the blocked tracks, and
-   re-run the finish reviewer for a verdict.
-4. Write `DESIGN.md` via the shipped documenter, discharging the FINISH line.
-5. Register a Spotify app and run the whole thing against a real playlist.
+1. Read round four's verdict and act on whatever it raises.
+2. Write `DESIGN.md` via the shipped documenter, discharging the FINISH line.
+3. Register a Spotify app and run the whole thing against a real playlist —
+   this is the only remaining unknown of any size.
+4. Optionally, the ceiling notes: real character-cell flapping, the staggered
+   cascade, unlit blank flaps for empty ground.
