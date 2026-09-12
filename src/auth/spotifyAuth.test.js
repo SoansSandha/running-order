@@ -1,5 +1,11 @@
 import { describe, expect, test, vi } from 'vitest'
-import { SCOPES, buildAuthorizeUrl, exchangeCodeForTokens, refreshTokens } from './spotifyAuth.js'
+import {
+  SCOPES,
+  buildAuthorizeUrl,
+  describeOriginProblem,
+  exchangeCodeForTokens,
+  refreshTokens,
+} from './spotifyAuth.js'
 
 const tokenResponse = (body, ok = true) => ({
   ok,
@@ -49,6 +55,33 @@ describe('buildAuthorizeUrl', () => {
   test('never requests a scope the app does not use', () => {
     expect(SCOPES).not.toContain('user-read-email')
     expect(SCOPES).not.toContain('ugc-image-upload')
+  })
+})
+
+describe('describeOriginProblem', () => {
+  // Spotify allows http only for loopback IP literals. A hostname that merely
+  // resolves to one is refused, and it is refused on Spotify's own error page
+  // where this app never gets to explain — so the app has to catch it first.
+  const at = (hostname, port = '', protocol = 'http:') => ({ hostname, port, protocol })
+
+  test('accepts the loopback literal', () => {
+    expect(describeOriginProblem(at('127.0.0.1', '5173'))).toBe(null)
+  })
+
+  test('accepts the IPv6 loopback literal', () => {
+    expect(describeOriginProblem(at('[::1]', '5173'))).toBe(null)
+  })
+
+  test('accepts any https host', () => {
+    expect(describeOriginProblem(at('sorter.example.com', '', 'https:'))).toBe(null)
+  })
+
+  test('rejects localhost, naming the address to use instead', () => {
+    expect(describeOriginProblem(at('localhost', '5173'))).toMatch(/127\.0\.0\.1:5173/)
+  })
+
+  test('rejects a plain http host that is not loopback', () => {
+    expect(describeOriginProblem(at('example.com'))).toBeTruthy()
   })
 })
 

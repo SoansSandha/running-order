@@ -21,6 +21,33 @@ export function currentRedirectUri() {
   return `${window.location.origin}/`
 }
 
+const LOOPBACK = new Set(['127.0.0.1', '[::1]', '::1'])
+
+/**
+ * Whether this origin can be registered as a redirect URI at all.
+ *
+ * Spotify permits http only for loopback IP literals. `localhost` is a
+ * hostname that merely resolves to one, and is refused — on Spotify's own
+ * error page, where this app never gets the chance to explain. So the app
+ * says it first.
+ *
+ * @param {{hostname: string, port: string, protocol: string}} [location]
+ * @returns {string|null} the problem, or null when the origin is fine
+ */
+export function describeOriginProblem(location = globalThis.location) {
+  const { hostname = '', port = '', protocol = '' } = location ?? {}
+
+  if (protocol === 'https:') return null
+  if (LOOPBACK.has(hostname)) return null
+
+  const suffix = port ? `:${port}` : ''
+  if (hostname === 'localhost') {
+    return `Spotify will not accept http://localhost${suffix}/ as a redirect URI — only the loopback address itself. Open this app at http://127.0.0.1${suffix}/ instead.`
+  }
+
+  return `Spotify only accepts https redirect URIs, or the loopback address http://127.0.0.1${suffix}/. This origin is neither.`
+}
+
 export function buildAuthorizeUrl({ clientId, redirectUri, codeChallenge, state }) {
   const params = new URLSearchParams({
     client_id: clientId,

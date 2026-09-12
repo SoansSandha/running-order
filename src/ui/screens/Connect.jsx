@@ -7,12 +7,13 @@
  * page where this app never gets a chance to explain.
  */
 
-import { currentRedirectUri } from '../../auth/spotifyAuth.js'
+import { currentRedirectUri, describeOriginProblem } from '../../auth/spotifyAuth.js'
 import { CopyStrip, Frame, Head, Lever, LeverRow, Notice } from '../components/chrome.jsx'
 
 export function ConnectScreen({ auth }) {
   const { clientId, setClientId, connect, status, error } = auth
   const connecting = status === 'connecting' || status === 'restoring'
+  const originProblem = describeOriginProblem()
 
   return (
     <Frame fill>
@@ -59,6 +60,13 @@ export function ConnectScreen({ auth }) {
           <div style={{ marginBottom: 22 }}>
             <span className="field-label">Redirect URI to register</span>
             <CopyStrip value={currentRedirectUri()} />
+            {originProblem ? (
+              <div style={{ marginTop: 10 }}>
+                <Notice tone="red" title="This address will not work">
+                  {originProblem}
+                </Notice>
+              </div>
+            ) : null}
             <p className="prose" style={{ fontSize: 'var(--fs-sub)', marginTop: 8 }}>
               Paste this into your app's settings exactly, trailing slash included.
               Spotify rejects <code>localhost</code>, so the loopback address is not
@@ -75,7 +83,7 @@ export function ConnectScreen({ auth }) {
           ) : null}
 
           <LeverRow>
-            <Lever type="submit" disabled={!clientId.trim() || connecting}>
+            <Lever type="submit" disabled={!clientId.trim() || connecting || Boolean(originProblem)}>
               {connecting ? 'Connecting' : 'Connect'}
             </Lever>
           </LeverRow>
