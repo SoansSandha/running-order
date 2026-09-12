@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-12 · **HEAD:** `6ed3866`
+**Last updated:** 2026-09-12 · **HEAD:** `146d53c`
 
 Design and decisions: [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -143,13 +143,64 @@ DESIGN.md records these as build gaps rather than system rules.
 
 ## Before the app can talk to Spotify
 
-One-time setup on the Spotify Developer Dashboard, not yet done:
+### The Premium requirement is on creating the app, not using it
 
-1. Create an app and copy its **Client ID** (PKCE needs no client secret).
-2. Register the redirect URI **exactly** as `http://127.0.0.1:5173/` —
-   trailing slash included. `localhost` is rejected outright; anything
-   deployed must be HTTPS.
-3. The app stays in Development Mode, which is enough for one user.
+Spotify now requires a Premium account to create a Web API app in the
+developer dashboard. It does **not** follow that a user of that app needs
+Premium: the endpoints this product uses — profile, playlist list, playlist
+tracks, reorder, create — have never been Premium-gated. Premium is required
+for the Web Playback SDK and for player control (`/me/player/*`), neither of
+which this app touches.
+
+So the arrangement in use — a Premium friend owns the app and adds this
+account under User Management — is the normal shape for a Development Mode
+app, and should work. It is not *confirmed* until a real authorization
+succeeds; that is the one thing nothing here can prove without trying.
+
+Worth knowing about that arrangement:
+
+- **Nothing of yours reaches the app owner.** PKCE issues tokens to this
+  browser and there is no server, so the friend owns the registration, not
+  the data. They can see the app exists; they cannot see your playlists.
+- **The Client ID is not a secret.** PKCE uses no client secret, so sharing
+  the ID is fine.
+- **Access depends on their app.** If they delete it or remove the user, this
+  stops working. Nothing here can recover from that except registering
+  another app.
+- **User Management matching is exact.** The friend must add the full name and
+  the email on the Spotify account. A mismatch fails at the consent screen
+  with "User not registered in the Developer Dashboard", not with anything
+  this app can explain.
+
+### The redirect URI
+
+Register exactly:
+
+```
+http://127.0.0.1:5173/
+```
+
+Trailing slash included. `http://localhost:5173/` is refused — Spotify allows
+plain http only for **loopback IP literals**, and `localhost` is a hostname
+that merely resolves to one, which RFC 8252 treats as hijackable.
+
+The trap this creates: Vite prints `localhost` by default, and the app derives
+its redirect URI from the origin it is served on. Register `127.0.0.1`, open
+`localhost`, and Spotify refuses the handshake on its own error page. Two
+guards now exist, so this should not be reachable:
+
+- `vite.config.js` binds `127.0.0.1` with `strictPort`, because a silent
+  fallback to 5174 changes the origin and breaks the match the same way.
+- The Connect screen checks its own origin, names the address to use instead,
+  and disables the button when the current one cannot work.
+
+### What failure looks like
+
+| Symptom | Cause |
+|---|---|
+| `INVALID_CLIENT: Invalid redirect URI` | Registered URI does not match the origin exactly — check the trailing slash and `127.0.0.1` vs `localhost` |
+| "User not registered in the Developer Dashboard" | Name or email in User Management does not match the Spotify account |
+| 403 on the first API call after connecting | Scope or account restriction; the app surfaces Spotify's own message |
 
 ---
 
