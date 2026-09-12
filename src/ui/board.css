@@ -192,9 +192,14 @@
 /* ---- The position gutter: the diff made legible ----------------------- */
 
 .slots {
-  flex-direction: row !important;
-  align-items: baseline !important;
-  justify-content: flex-start !important;
+  /* Stays a column cell so the shared rule's justify-content: center still
+     means "centre vertically". The row lives one level in. */
+  align-items: flex-start;
+}
+
+.slots-inner {
+  display: inline-flex;
+  align-items: baseline;
   gap: 5px;
   font-size: 0.9rem;
 }

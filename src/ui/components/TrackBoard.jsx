@@ -119,22 +119,24 @@ function BoardRow({ row, rowIndex, turning, written }) {
       aria-rowindex={rowIndex}
     >
       <span className="slots" role="cell">
-        {moves ? (
-          <>
-            <span className="slot-from num">{from}</span>
-            <span className="slot-lead" aria-hidden="true">
-              ›
-            </span>
-            <FlapText className="slot-to" value={String(to)} />
-          </>
-        ) : (
-          <>
-            <span className="slot-hold num">{from}</span>
-            <span className="slot-dash" aria-hidden="true">
-              –
-            </span>
-          </>
-        )}
+        <span className="slots-inner">
+          {moves ? (
+            <>
+              <span className="slot-from num">{from}</span>
+              <span className="slot-lead" aria-hidden="true">
+                ›
+              </span>
+              <FlapText className="slot-to" value={String(to)} />
+            </>
+          ) : (
+            <>
+              <span className="slot-hold num">{from}</span>
+              <span className="slot-dash" aria-hidden="true">
+                –
+              </span>
+            </>
+          )}
+        </span>
       </span>
 
       <span className="cell-stack" role="cell">
