@@ -54,8 +54,24 @@ export async function replaceTracks(client, playlistId, uris) {
   return result?.snapshot_id ?? null
 }
 
+/** Statuses that mean "wrong door", as opposed to "you may not do this". */
+const ENDPOINT_REFUSALS = new Set([403, 404, 405])
+
+/**
+ * Create a playlist for the signed-in user.
+ *
+ * Spotify has moved this surface: `/users/{id}/playlists` answers 403 for
+ * this app while the rest of the playlist API has migrated toward `/me`. Both
+ * are attempted rather than betting on one, and the request log shows which
+ * answered. A failure that is not about the endpoint is not retried.
+ */
 export async function createPlaylist(client, userId, { name, description = '', isPublic = false }) {
-  return client.post(`/users/${userId}/playlists`, {
-    body: { name, description, public: isPublic },
-  })
+  const body = { name, description, public: isPublic }
+
+  try {
+    return await client.post('/me/playlists', { body })
+  } catch (failure) {
+    if (!ENDPOINT_REFUSALS.has(failure?.status)) throw failure
+    return client.post(`/users/${userId}/playlists`, { body })
+  }
 }

@@ -75,12 +75,29 @@ describe('addTracksInChunks', () => {
 })
 
 describe('createPlaylist', () => {
-  test('creates a private playlist under the given user', async () => {
+  /** A client that rejects the first N posts with a given status. */
+  function rejecting(status, rejectPaths) {
+    const calls = []
+    return {
+      calls,
+      post: vi.fn(async (path, options) => {
+        calls.push({ method: 'POST', path, ...options })
+        if (rejectPaths.includes(path)) {
+          const error = new Error('Forbidden')
+          error.status = status
+          throw error
+        }
+        return { id: 'created' }
+      }),
+    }
+  }
+
+  test('creates a private playlist on the me endpoint', async () => {
     const client = recorder([{ id: 'new1' }])
     const created = await createPlaylist(client, 'u1', { name: 'Sorted', description: 'by artist' })
     expect(client.calls[0]).toMatchObject({
       method: 'POST',
-      path: '/users/u1/playlists',
+      path: '/me/playlists',
       body: { name: 'Sorted', description: 'by artist', public: false },
     })
     expect(created.id).toBe('new1')
@@ -90,5 +107,29 @@ describe('createPlaylist', () => {
     const client = recorder([{ id: 'new2' }])
     await createPlaylist(client, 'u1', { name: 'Sorted', isPublic: true })
     expect(client.calls[0].body.public).toBe(true)
+  })
+
+  test('falls back to the user endpoint when the me endpoint refuses it', async () => {
+    // Spotify has been moving this surface; rather than bet on one path, try
+    // the other before giving up. Which one answered is visible in the log.
+    const client = rejecting(403, ['/me/playlists'])
+    const created = await createPlaylist(client, 'u1', { name: 'Sorted' })
+    expect(client.calls.map((call) => call.path)).toEqual([
+      '/me/playlists',
+      '/users/u1/playlists',
+    ])
+    expect(created.id).toBe('created')
+  })
+
+  test('does not retry an error that is not about the endpoint', async () => {
+    const client = rejecting(401, ['/me/playlists', '/users/u1/playlists'])
+    await expect(createPlaylist(client, 'u1', { name: 'Sorted' })).rejects.toThrow()
+    expect(client.calls).toHaveLength(1)
+  })
+
+  test('surfaces the original failure when both endpoints refuse', async () => {
+    const client = rejecting(403, ['/me/playlists', '/users/u1/playlists'])
+    await expect(createPlaylist(client, 'u1', { name: 'Sorted' })).rejects.toThrow()
+    expect(client.calls).toHaveLength(2)
   })
 })
