@@ -63,7 +63,7 @@
   align-items: center;
   gap: 6px;
   font-family: var(--cond);
-  font-size: 0.74rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -76,6 +76,11 @@
 
 .head-back:hover {
   color: var(--amber);
+}
+
+.chevron {
+  display: block;
+  flex: none;
 }
 
 .tally {
@@ -93,7 +98,7 @@
 }
 
 .tally-value {
-  font-size: clamp(1.15rem, 2.2vw, 1.75rem);
+  font-size: var(--fs-tally);
   font-weight: 500;
   line-height: 1;
   color: var(--flap);
@@ -271,7 +276,7 @@
 
 .slot-lead {
   color: var(--flap-faint);
-  font-size: 0.75rem;
+  font-size: var(--fs-label);
 }
 
 .slot-to {
@@ -291,7 +296,7 @@
 
 .row-title {
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: var(--fs-row);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -299,7 +304,7 @@
 }
 
 .row-sub {
-  font-size: 0.82rem;
+  font-size: var(--fs-sub);
   color: var(--flap-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -307,7 +312,7 @@
 }
 
 .row-meta {
-  font-size: 0.8rem;
+  font-size: var(--fs-sub);
   color: var(--flap-dim);
   white-space: nowrap;
 }
@@ -421,7 +426,7 @@
 
 .lever-quiet {
   font-family: var(--cond);
-  font-size: 0.85rem;
+  font-size: var(--fs-control);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -502,7 +507,7 @@
 .field-label {
   display: block;
   font-family: var(--cond);
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -532,7 +537,7 @@
 
 .copy-strip button {
   font-family: var(--cond);
-  font-size: 0.72rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -688,7 +693,7 @@
 }
 
 .strategy-note {
-  font-size: 0.83rem;
+  font-size: var(--fs-sub);
   color: var(--flap-dim);
   margin-top: 2px;
 }
@@ -706,7 +711,7 @@
 
 .option {
   font-family: var(--cond);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -882,11 +887,11 @@
 
 .peek-pos {
   color: var(--flap-faint);
-  font-size: 0.82rem;
+  font-size: var(--fs-sub);
 }
 
 .peek-title {
-  font-size: 0.9rem;
+  font-size: var(--fs-row);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -894,7 +899,7 @@
 }
 
 .peek-artist {
-  font-size: 0.78rem;
+  font-size: var(--fs-sub);
   color: var(--flap-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -904,7 +909,7 @@
 .peek-more {
   padding: 9px 12px;
   font-family: var(--cond);
-  font-size: 0.74rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -948,7 +953,7 @@
 .suggestion-target {
   display: block;
   margin-top: 3px;
-  font-size: 0.78rem;
+  font-size: var(--fs-sub);
   color: var(--flap-faint);
 }
 

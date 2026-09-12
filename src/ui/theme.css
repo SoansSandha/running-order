@@ -35,6 +35,14 @@
   --shadow-seat: 0 1px 0 rgb(255 255 255 / 3%), 0 2px 6px -2px rgb(0 0 0 / 55%);
   --shadow-lift: 0 6px 18px -6px rgb(0 0 0 / 70%);
 
+  /* The small end of the ramp. Eight ad-hoc sizes once lived in this band;
+     these three are the steps they collapse to. */
+  --fs-label: 0.72rem;
+  --fs-sub: 0.82rem;
+  --fs-control: 0.85rem;
+  --fs-row: 0.95rem;
+  --fs-tally: clamp(1.15rem, 2.2vw, 1.75rem);
+
   --sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
   --cond: 'Barlow Condensed', 'Barlow', ui-sans-serif, sans-serif;
   --mono: 'Azeret Mono Variable', ui-monospace, monospace;

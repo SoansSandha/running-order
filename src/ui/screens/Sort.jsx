@@ -326,7 +326,7 @@ function SuggestionReview({ suggestions, accepted, onToggle }) {
       <p className="col-label" style={{ marginBottom: 10 }}>
         Needs review · {suggestions.length}
       </p>
-      <p className="prose" style={{ fontSize: '0.84rem', marginTop: 0, marginBottom: 12 }}>
+      <p className="prose" style={{ fontSize: 'var(--fs-sub)', marginTop: 0, marginBottom: 12 }}>
         Close matches the file did not name exactly. Accept one and it takes its
         place in the CSV order; leave it and that track keeps its slot.
       </p>
@@ -404,7 +404,7 @@ function CsvReport({ report }) {
       </div>
 
       {counts.matched > 0 ? (
-        <p className="prose" style={{ fontSize: '0.84rem', marginTop: 10 }}>
+        <p className="prose" style={{ fontSize: 'var(--fs-sub)', marginTop: 10 }}>
           Matched by URI {report.counts.byTier.uri} · ISRC {report.counts.byTier.isrc} · title and
           artist {report.counts.byTier.titleArtist + report.counts.byTier.titleAnyArtist}
         </p>

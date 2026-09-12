@@ -8,6 +8,26 @@
 import { useState } from 'react'
 import { FlapText } from './Flap.jsx'
 
+/** Authored rather than a glyph: one stroke weight, sized to the label. */
+function Chevron() {
+  return (
+    <svg
+      className="chevron"
+      viewBox="0 0 12 12"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="square"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M7.5 2.5 3.5 6l4 3.5" />
+    </svg>
+  )
+}
+
 export function Frame({ children, fill = false }) {
   return (
     <div className="frame" data-fill={fill ? 'true' : 'false'}>
@@ -26,7 +46,8 @@ export function Head({ back, title, tally = [] }) {
       <div className="head-id">
         {back ? (
           <button type="button" className="head-back" onClick={back.onClick}>
-            <span aria-hidden="true">&lsaquo;</span> {back.label}
+            <Chevron />
+            {back.label}
           </button>
         ) : null}
         <h1 className="destination">{title}</h1>

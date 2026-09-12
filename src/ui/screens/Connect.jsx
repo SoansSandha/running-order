@@ -59,7 +59,7 @@ export function ConnectScreen({ auth }) {
           <div style={{ marginBottom: 22 }}>
             <span className="field-label">Redirect URI to register</span>
             <CopyStrip value={currentRedirectUri()} />
-            <p className="prose" style={{ fontSize: '0.85rem', marginTop: 8 }}>
+            <p className="prose" style={{ fontSize: 'var(--fs-sub)', marginTop: 8 }}>
               Paste this into your app's settings exactly, trailing slash included.
               Spotify rejects <code>localhost</code>, so the loopback address is not
               interchangeable with it.
