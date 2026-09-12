@@ -25,7 +25,8 @@ describe('executeClone', () => {
       targetTracks: makeTracks([{ name: 'a' }]),
       strategyLabel: 'Artist',
     })
-    expect(client.calls[0].path).toBe('/users/u1/playlists')
+    // Which endpoint serves the create is mutations' business, not the
+    // clone flow's — asserted in mutations.test.js.
     expect(client.calls[0].body.name).toBe('Road Trip (sorted by Artist)')
   })
 
