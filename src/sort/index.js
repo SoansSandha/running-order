@@ -46,8 +46,8 @@ export const STRATEGIES = [
     options: [
       select('innerOrder', 'Within each artist', DEFAULT_INNER_ORDER, [
         { value: 'addedAt', label: 'Date added — oldest at the top' },
-        { value: 'releaseDate', label: 'Release date — reads as a discography' },
-        { value: 'album', label: 'Album, then track number' },
+        { value: 'releaseDate', label: 'Album release date — oldest album first' },
+        { value: 'album', label: 'Album name A to Z' },
         { value: 'title', label: 'Title A to Z' },
       ]),
     ],

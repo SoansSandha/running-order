@@ -86,6 +86,70 @@ describe('ordering within an artist block', () => {
   })
 })
 
+describe('album blocks inside an artist', () => {
+  const onAlbum = (name, album, releaseDate, discNumber, trackNumber) => ({
+    name,
+    artists: artist('gill', 'Amrinder Gill'),
+    album,
+    releaseDate,
+    discNumber,
+    trackNumber,
+  })
+
+  test('release date orders whole albums oldest first, in track order inside', () => {
+    // The album ordering people expect from a discography: earliest record at
+    // the top of the artist's block, latest at the bottom, each read through.
+    const tracks = makeTracks([
+      onAlbum('Newest B', 'Judaa 3', '2022-08-05', 1, 2),
+      onAlbum('Oldest A', 'Judaa', '2012-04-01', 1, 1),
+      onAlbum('Middle B', 'Judaa 2', '2016-03-11', 1, 2),
+      onAlbum('Newest A', 'Judaa 3', '2022-08-05', 1, 1),
+      onAlbum('Oldest B', 'Judaa', '2012-04-01', 1, 2),
+      onAlbum('Middle A', 'Judaa 2', '2016-03-11', 1, 1),
+    ])
+
+    expect(names(artistGrouped(tracks, { innerOrder: 'releaseDate' }))).toEqual([
+      'Oldest A',
+      'Oldest B',
+      'Middle A',
+      'Middle B',
+      'Newest A',
+      'Newest B',
+    ])
+  })
+
+  test('a second disc follows the first, not interleaved with it', () => {
+    const tracks = makeTracks([
+      onAlbum('d2t1', 'Double', '2000-01-01', 2, 1),
+      onAlbum('d1t2', 'Double', '2000-01-01', 1, 2),
+      onAlbum('d1t1', 'Double', '2000-01-01', 1, 1),
+    ])
+    expect(names(artistGrouped(tracks, { innerOrder: 'releaseDate' })))
+      .toEqual(['d1t1', 'd1t2', 'd2t1'])
+  })
+
+  test('two albums sharing a release date stay in separate blocks', () => {
+    const tracks = makeTracks([
+      onAlbum('B one', 'Beta', '2019-05-05', 1, 1),
+      onAlbum('A two', 'Alpha', '2019-05-05', 1, 2),
+      onAlbum('B two', 'Beta', '2019-05-05', 1, 2),
+      onAlbum('A one', 'Alpha', '2019-05-05', 1, 1),
+    ])
+    expect(names(artistGrouped(tracks, { innerOrder: 'releaseDate' })))
+      .toEqual(['A one', 'A two', 'B one', 'B two'])
+  })
+
+  test('album name order is the other album option, and keeps track order', () => {
+    const tracks = makeTracks([
+      onAlbum('Z two', 'Zenith', '2001-01-01', 1, 2),
+      onAlbum('A one', 'Apex', '2020-01-01', 1, 1),
+      onAlbum('Z one', 'Zenith', '2001-01-01', 1, 1),
+    ])
+    expect(names(artistGrouped(tracks, { innerOrder: 'album' })))
+      .toEqual(['A one', 'Z one', 'Z two'])
+  })
+})
+
 describe('collaborations', () => {
   test('files a collaboration under its primary artist only', () => {
     const tracks = makeTracks([
