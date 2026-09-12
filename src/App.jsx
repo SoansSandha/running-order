@@ -4,6 +4,7 @@ import { PlaylistsScreen } from './ui/screens/Playlists.jsx'
 import { PreviewScreen } from './ui/screens/Preview.jsx'
 import { ProgressScreen } from './ui/screens/Progress.jsx'
 import { SortScreen } from './ui/screens/Sort.jsx'
+import { setFieldProjection } from './api/playlists.js'
 import { enableApiLog } from './ui/apiLog.js'
 import { ApiLog } from './ui/components/ApiLog.jsx'
 import { loadDemo } from './ui/demoData.js'
@@ -20,6 +21,16 @@ const debugging =
   typeof window !== 'undefined' &&
   new URLSearchParams(window.location.search).has('debug')
 enableApiLog(debugging)
+
+// ?raw=1 drops the field projection, so the request log shows an item's real
+// shape rather than only the fields the projection happened to name.
+if (
+  import.meta.env.DEV &&
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).has('raw')
+) {
+  setFieldProjection(false)
+}
 
 export default function App() {
   const auth = useAuth()

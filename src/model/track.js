@@ -22,7 +22,10 @@ const EMPTY_ALBUM = Object.freeze({
  * @param {number} index the item's position in the fetched playlist
  */
 export function normalizePlaylistItem(item, index) {
-  const raw = item?.track ?? null
+  // The items endpoint carries the track under `item`; the retired tracks
+  // endpoint used `track`. Reading only one name turns a whole playlist into
+  // rows marked "unavailable".
+  const raw = item?.item ?? item?.track ?? null
   const isUnavailable = raw === null
   const isEpisode = raw?.type === 'episode'
 

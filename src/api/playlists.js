@@ -11,16 +11,36 @@ const PLAYLIST_PAGE_SIZE = 50
 const TRACK_PAGE_SIZE = 100
 
 /**
- * Only the fields the Track model actually reads. Spotify returns a very large
- * object per track otherwise, and playlists run to thousands of them.
+ * Trim the payload to what the Track model reads.
+ *
+ * A projection naming a field the endpoint does not have is not an error —
+ * Spotify returns 200 and silently omits it. That is how asking for `track(…)`
+ * on the items endpoint produced a playlist of rows with no track at all. So
+ * both names are requested, and whichever the endpoint carries comes back.
  */
+const TRACK_SHAPE =
+  'id,uri,name,type,duration_ms,popularity,explicit,track_number,disc_number,' +
+  'external_ids(isrc),artists(id,name),show(id,name),' +
+  'album(id,name,release_date,release_date_precision)'
+
 const TRACK_FIELDS = [
   'total',
   'next',
-  'items(added_at,is_local,track(id,uri,name,type,duration_ms,popularity,explicit,' +
-    'track_number,disc_number,external_ids(isrc),artists(id,name),show(id,name),' +
-    'album(id,name,release_date,release_date_precision)))',
+  `items(added_at,is_local,item(${TRACK_SHAPE}),track(${TRACK_SHAPE}))`,
 ].join(',')
+
+/**
+ * Debug switch: turn the projection off to see an item's real shape.
+ *
+ * A projection cannot reveal a field it does not name, so when the shape is
+ * in doubt the only way to learn it is to stop trimming. Costs bandwidth, not
+ * correctness.
+ */
+let projectionEnabled = true
+
+export function setFieldProjection(on) {
+  projectionEnabled = on
+}
 
 /** Walk a paginated Spotify collection to the end. */
 export async function fetchAllPages(client, path, { query, onProgress } = {}) {
@@ -81,7 +101,10 @@ export async function getPlaylistSnapshot(client, playlistId) {
 
 export async function fetchPlaylistTracks(client, playlistId, { onProgress } = {}) {
   const items = await fetchAllPages(client, playlistItemsPath(playlistId), {
-    query: { limit: TRACK_PAGE_SIZE, fields: TRACK_FIELDS },
+    query: {
+      limit: TRACK_PAGE_SIZE,
+      fields: projectionEnabled ? TRACK_FIELDS : undefined,
+    },
     onProgress,
   })
   return items.map((item, index) => normalizePlaylistItem(item, index))

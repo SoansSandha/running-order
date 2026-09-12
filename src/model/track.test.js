@@ -76,6 +76,31 @@ describe('normalizePlaylistItem — ordinary track', () => {
   })
 })
 
+describe('normalizePlaylistItem — the inner field name', () => {
+  // The playlist items endpoint carries the track under `item`; the older
+  // tracks endpoint used `track`. Reading only one name turns a full playlist
+  // into a list of "unavailable" rows, which is exactly what happened live.
+  test('reads a track carried as `item`', () => {
+    const { track, ...rest } = fullItem
+    const normalized = normalizePlaylistItem({ ...rest, item: track }, 0)
+    expect(normalized.name).toBe('Something')
+    expect(normalized.isUnavailable).toBe(false)
+  })
+
+  test('still reads a track carried as `track`', () => {
+    expect(normalizePlaylistItem(fullItem, 0).name).toBe('Something')
+  })
+
+  test('prefers `item` when a payload somehow carries both', () => {
+    const { track, ...rest } = fullItem
+    const normalized = normalizePlaylistItem(
+      { ...rest, item: { ...track, name: 'From item' }, track },
+      0,
+    )
+    expect(normalized.name).toBe('From item')
+  })
+})
+
 describe('normalizePlaylistItem — unavailable track', () => {
   const track = normalizePlaylistItem({ added_at: '2020-01-01T00:00:00Z', track: null }, 3)
 
