@@ -1,10 +1,11 @@
 # Status
 
-**Last updated:** 2026-09-11 · **HEAD:** `dcc51b6`
+**Last updated:** 2026-09-12 · **HEAD:** `6ed3866`
 
 Design and decisions: [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
 Direction contract: `.impeccable/surfaces/src-app-jsx.md`.
+Design system: [../DESIGN.md](../DESIGN.md).
 
 This file tracks only what is built and what is next.
 
@@ -15,11 +16,9 @@ This file tracks only what is built and what is next.
 All logic layers and all five screens are built. **273 tests across 18 files,
 all passing.** Build clean, design detector clean, working tree clean.
 
-Round four scored every fix resolved with no new regressions, and left one
-defect open, which is now fixed. A fifth pass was in flight when this was
-written — check its verdict before assuming the build is settled. `DESIGN.md`
-has still never been written, which the direction contract's FINISH line
-requires.
+**The design review has run to a clean verdict and `DESIGN.md` is written, so
+the direction contract's FINISH line is discharged.** Eight review rounds ran;
+the last closed with no open findings.
 
 Nothing has run against the live Spotify API. That needs a Client ID.
 
@@ -79,6 +78,7 @@ each row inking green as its own write returns.
 | `/?demo=1&screen=progress&progress=done` | Progress, finished |
 | `/?demo=1&screen=preview&playlist=2&focus=blocked` | Preview scrolled to the blocked tracks, proving their red treatment |
 | `/?demo=1&screen=sort&csv=1` | Sort with a seeded CSV, reconciliation report, and a fuzzy suggestion to accept |
+| `/?demo=1&screen=preview&playlist=2&limit=4` | A short playlist, which leaves the unlit board field visible |
 
 `playlist=2` is a nearly-sorted playlist; `playlist=1` (default) is fully
 shuffled so every row moves. Demo data is gated on `import.meta.env.DEV` and
@@ -88,60 +88,46 @@ tree-shaken from production.
 
 ## Design review history
 
-Four passes have run against this build.
+Eight passes ran against this build, all closed.
 
 | Round | Outcome |
 |---|---|
-| 1 | `recapture` — the screenshots predated the last write to the visual system, so nothing shown was the real artifact |
+| 1 | `recapture` — screenshots predated the last write to the visual system |
 | 2 | `fix` — eight material defects |
-| 3 | `fix` — six of eight resolved, two partial, **three regressions introduced by the fix batch itself** |
-| 4 | `fix` — all six resolved, **no new regressions**, one legacy defect found |
-| 5 | In flight when this was written |
+| 3 | `fix` — six of eight resolved, two partial, **three regressions from the fix batch itself** |
+| 4 | `fix` — all resolved, no new regressions, one legacy defect (position gutter top-aligned) |
+| 5 | `fix` — every fidelity element match; one material fix (phone lever stack) |
+| 6 | `fix` — lever fix resolved; **three faults in the blank-flap ground I had just added** |
+| 7 | `fix` — join and seam resolved; column rules partial at phone width |
+| 8 | closed — all resolved, no regressions; one latent duplicate declaration |
 
-**Everything round 3 raised is now addressed:**
+Then `DESIGN.md` and `.impeccable/design.json` were written from the shipped
+artifact, and the surface brief's one Unresolved item was marked resolved.
 
-- Playlists drew two misaligned column grids (`--cols` sat on `.pl-row`
-  only). One declaration now governs header and rows.
-- The Playlists track cell stacked and bottom-aligned, because the shared
-  cell rule makes every cell a column flex box and silently reinterprets an
-  inline `justify-content: flex-end` as "bottom". Replaced with `.cell-end`,
-  which states its direction.
-- Sort clipped card text against a hard edge. It flows normally again with a
-  sticky lever row and a gradient above it, so content dissolves into the bar.
-  The board ground moved from `.frame[data-fill]` onto `.frame` so flowing
-  screens keep it.
-- Blocked-row red was unproven — a CSS rule is not evidence. `&focus=blocked`
-  lands the board on them; `blocked.png` shows it.
+### Two rules the system depends on
 
-**Round 4's one finding is also fixed.** The POS gutter was top-aligned
-against centred rows on every board screen, a 12px lift, and it had been there
-since the round-two batch. `.slots` flipped itself to `flex-direction: row`,
-which reinterpreted the shared cell rule's `justify-content: center` as
-horizontal and handed the vertical axis to `align-items: baseline` — and
-baseline flushes to the top. The slot spans now baseline-align to each other
-inside `.slots-inner` while the cell stays a column, so it centres like every
-other cell. Verified by measuring slot and title midpoints in the live page
-rather than by eye.
+Both were violated during the build, and each cost a review round. They are
+recorded in DESIGN.md as named rules.
 
-Worth remembering: this was the *same* failure as the Playlists track cell — a
-direction flip silently reinterpreting alignment. Fixed in one place, missed
-in the other. If a cell lays out horizontally, say `flex-direction: row`
-explicitly.
+- **A cell that lays out horizontally must state `flex-direction: row`.** The
+  shared board-cell rule makes every cell a column flex box, which silently
+  reinterprets `justify-content` and `align-items`. This produced the
+  bottom-aligned Playlists track cell and the top-aligned position gutter —
+  the same bug twice, fixed in one place and missed in the other.
+- **The board grid is declared once per screen per breakpoint**, on `.board` /
+  `.board-playlists`. Header, seated rows, and the unlit field all inherit it,
+  and `UnlitField` derives its module count from the resolved grid rather than
+  a literal. Declaring it per element made the field draw four column modules
+  against three seated rows at phone width — and a leftover duplicate nearly
+  reopened it a third time.
 
-### Deferred by agreement: the ceiling notes
+### Known gaps, recorded as gaps
 
-Character-cell flapping is confined to two numerals rather than every string;
-the staggered cascade the contract names never fires (one row turns at a
-time); empty board ground is dead space rather than unlit blank flaps. The
-reviewer agreed these are ceiling, not material defects, and said to
-reconsider them only once Playlists was square. Playlists is now square, so
-these are the natural next ambition if the world is worth pushing further.
-
-### Still open
-
-**`DESIGN.md` has never been written.** The contract's FINISH line requires
-it, written at finish from the built world by the shipped documenter. Until
-it exists this build is incomplete by its own terms.
+Not defects, and deliberately not done: no character-cell flapping on track
+titles (only the position numerals flap), no grain on the "enamelled" board
+body, and Connect's empty field is plain ground rather than blank flaps
+(it has no scroller, and banding behind centred copy reads as a backdrop).
+DESIGN.md records these as build gaps rather than system rules.
 
 ---
 
@@ -209,9 +195,9 @@ find src -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.css" \) \
 
 ## Suggested order when picking back up
 
-1. Read round four's verdict and act on whatever it raises.
-2. Write `DESIGN.md` via the shipped documenter, discharging the FINISH line.
-3. Register a Spotify app and run the whole thing against a real playlist —
-   this is the only remaining unknown of any size.
-4. Optionally, the ceiling notes: real character-cell flapping, the staggered
-   cascade, unlit blank flaps for empty ground.
+1. **Register a Spotify app and run this against a real playlist.** This is
+   the only remaining unknown of any size — nothing has touched the live API,
+   so every network path is tested against mocks and nothing else.
+2. Resuming an interrupted run, and listing operations in the dry run.
+3. Optionally the two open ceiling items: character-cell flapping on titles,
+   and grain on the board body.
