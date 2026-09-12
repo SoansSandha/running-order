@@ -360,6 +360,7 @@ export function useSorterApp(auth, demo = null) {
     previewRows,
     movingCount,
     writtenKeys,
+    focusKey: demo?.focusKey ?? null,
     ops,
     run,
     outcome,

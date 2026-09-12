@@ -20,6 +20,7 @@ export function PreviewScreen({ app }) {
     setScreen,
     applyInPlace,
     applyClone,
+    focusKey,
   } = app
 
   const blocked = previewRows.filter((row) => row.blocked)
@@ -60,6 +61,7 @@ export function PreviewScreen({ app }) {
       <div style={{ paddingTop: 18, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <TrackBoard
           rows={previewRows}
+          scrollToKey={focusKey}
           emptyTitle="Nothing to show"
           emptyBody="This playlist has no tracks."
         />

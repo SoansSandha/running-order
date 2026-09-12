@@ -157,6 +157,12 @@ export function loadDemo() {
     playlist: playlists[which === 2 ? 1 : 0],
     // Lets a capture land straight on one screen, in a given state.
     screen: params.get('screen') ?? 'playlists',
+    // Blocked tracks sort to the bottom, so proving their treatment needs a
+    // way to land the board on them.
+    focusKey:
+      params.get('focus') === 'blocked'
+        ? (tracks.find((track) => track.isUnavailable || track.isLocal)?.originalIndex ?? null)
+        : null,
     ...progressState(params.get('progress'), tracks),
   }
 }

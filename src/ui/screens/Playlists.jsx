@@ -79,7 +79,7 @@ export function PlaylistsScreen({ app, auth }) {
         </div>
       ) : null}
 
-      <div className="board-cols" role="row">
+      <div className="board-cols pl-cols" role="row">
         <span className="col-label">Art</span>
         <span className="col-label">Playlist</span>
         <span className="col-label col-artist">Owner</span>
@@ -122,10 +122,7 @@ export function PlaylistsScreen({ app, auth }) {
               {item.owner.displayName}
             </span>
 
-            <span
-              role="cell"
-              style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}
-            >
+            <span className="cell-end" role="cell">
               <span className="row-meta num">{formatCount(item.trackCount)}</span>
               {item.editable ? null : <Chip tone="amber">Clone only</Chip>}
             </span>

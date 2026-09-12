@@ -63,8 +63,12 @@ export function QuietLever({ children, ...props }) {
   )
 }
 
-export function LeverRow({ children }) {
-  return <div className="lever-row">{children}</div>
+export function LeverRow({ children, sticky = false }) {
+  return (
+    <div className="lever-row" data-sticky={sticky ? 'true' : 'false'}>
+      {children}
+    </div>
+  )
 }
 
 export function Chip({ tone, children }) {

@@ -54,7 +54,7 @@ export function SortScreen({ app }) {
   const strategy = STRATEGIES.find((item) => item.id === strategyId)
 
   return (
-    <Frame fill>
+    <Frame>
       <Head
         back={{ label: 'All playlists', onClick: () => setScreen('playlists') }}
         title={playlist?.name ?? 'Playlist'}
@@ -68,7 +68,6 @@ export function SortScreen({ app }) {
         ]}
       />
 
-      <div className="board-scroll">
       {busy ? (
         <div className="section">
           <p className="col-label" style={{ marginBottom: 8 }}>
@@ -133,9 +132,8 @@ export function SortScreen({ app }) {
           {ready ? <OrderPeek tracks={targetTracks} /> : null}
         </div>
       </div>
-      </div>
 
-      <LeverRow>
+      <LeverRow sticky>
         <span className="spacer" />
         <Lever onClick={() => setScreen('preview')} disabled={!ready}>
           Preview the change
