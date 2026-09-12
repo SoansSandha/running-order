@@ -105,6 +105,25 @@
 
 /* ---- Column headers and rows ------------------------------------------ */
 
+/*
+ * The grid lives on the board wrapper, so the header, the rows, and the
+ * unlit field cannot disagree about it. Declaring it per-element is what let
+ * the field render four modules against three seated rows at phone width.
+ */
+.board {
+  --cols: 104px minmax(0, 1fr) 20ch 13ch 8ch;
+  --row-h: 46px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.board-playlists {
+  --cols: 64px minmax(0, 1fr) 14ch 11ch;
+  --row-h: 58px;
+}
+
 .board-cols,
 .board-row {
   display: grid;
@@ -710,13 +729,6 @@
 
 /* ---- Playlist board rows ---------------------------------------------- */
 
-.pl-cols,
-.pl-scroll,
-.pl-row {
-  --cols: 64px minmax(0, 1fr) 14ch 11ch;
-  --row-h: 58px;
-}
-
 .pl-row {
   width: 100%;
   text-align: left;
@@ -766,13 +778,13 @@
    * The two-numeral gutter is the last thing to go: it is what makes the
    * diff legible, so the artist folds under the title instead.
    */
-  .board-cols,
-  .board-row {
+  .board {
     --cols: 88px minmax(0, 1fr) 8ch;
+    --row-h: 58px;
   }
 
-  .board-row,
-  .board-scroll {
+  .board-playlists {
+    --cols: 64px minmax(0, 1fr) 11ch;
     --row-h: 58px;
   }
 

@@ -73,7 +73,7 @@ export function TrackBoard({ rows, turningKeys, writtenKeys, emptyTitle, emptyBo
   const visible = rows.slice(range.start, range.end)
 
   return (
-    <>
+    <div className="board">
       <div className="board-cols" role="row">
         <span className="col-label">Pos</span>
         <span className="col-label">Track</span>
@@ -103,9 +103,9 @@ export function TrackBoard({ rows, turningKeys, writtenKeys, emptyTitle, emptyBo
 
         <div style={{ height: Math.max(0, (rows.length - range.end) * rowHeight) }} />
 
-        <UnlitField cells={5} />
+        <UnlitField />
       </div>
-    </>
+    </div>
   )
 }
 

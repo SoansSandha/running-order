@@ -80,14 +80,15 @@ export function PlaylistsScreen({ app, auth }) {
         </div>
       ) : null}
 
-      <div className="board-cols pl-cols" role="row">
+      <div className="board board-playlists">
+      <div className="board-cols" role="row">
         <span className="col-label">Art</span>
         <span className="col-label">Playlist</span>
         <span className="col-label col-artist">Owner</span>
         <span className="col-label">Tracks</span>
       </div>
 
-      <div className="board-scroll pl-scroll" role="table" aria-label="Your playlists">
+      <div className="board-scroll" role="table" aria-label="Your playlists">
         {shown.length === 0 && !busy ? (
           <BoardEmpty title={playlists.length ? 'Nothing matches' : 'No playlists yet'}>
             {playlists.length
@@ -130,7 +131,8 @@ export function PlaylistsScreen({ app, auth }) {
           </button>
         ))}
 
-        <UnlitField cells={4} />
+        <UnlitField />
+      </div>
       </div>
     </Frame>
   )

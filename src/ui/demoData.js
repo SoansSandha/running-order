@@ -137,7 +137,14 @@ export function loadDemo() {
   const shuffled = buildTracks()
   const nearlySorted = buildNearlySorted(shuffled)
   const which = Number(params.get('playlist') ?? '1')
-  const tracks = which === 2 ? nearlySorted : shuffled
+  const chosen = which === 2 ? nearlySorted : shuffled
+  // A short playlist leaves the unlit field visible on the track board,
+  // which is otherwise only observable on Playlists.
+  const limit = Number(params.get('limit') ?? '0')
+  const tracks =
+    limit > 0
+      ? chosen.slice(0, limit).map((track, index) => ({ ...track, originalIndex: index }))
+      : chosen
 
   const playlists = PLAYLISTS.map((item, index) => ({
     ...item,
