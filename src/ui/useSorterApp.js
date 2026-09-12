@@ -38,9 +38,11 @@ export function useSorterApp(auth, demo = null) {
   const [tracks, setTracks] = useState(demo?.tracks ?? [])
   const demoRef = useRef(demo)
 
-  const [strategyId, setStrategyId] = useState('artist')
-  const [options, setOptions] = useState(() => defaultOptionsFor('artist'))
-  const [csv, setCsv] = useState(null)
+  const [strategyId, setStrategyId] = useState(demo?.strategyId ?? 'artist')
+  const [options, setOptions] = useState(() =>
+    demo?.strategyId === CSV_STRATEGY ? {} : defaultOptionsFor('artist'),
+  )
+  const [csv, setCsv] = useState(demo?.csv ?? null)
 
   const [run, setRun] = useState(demo?.run ?? null)
   const [outcome, setOutcome] = useState(demo?.outcome ?? null)
@@ -202,6 +204,20 @@ export function useSorterApp(auth, demo = null) {
     )
   }, [])
 
+  /** Accept or reject one fuzzy suggestion. Nothing is applied until it is. */
+  const toggleSuggestion = useCallback((rowIndex) => {
+    setCsv((current) => {
+      if (!current) return current
+      const accepted = current.accepted ?? []
+      return {
+        ...current,
+        accepted: accepted.includes(rowIndex)
+          ? accepted.filter((index) => index !== rowIndex)
+          : [...accepted, rowIndex],
+      }
+    })
+  }, [])
+
   const setCsvOption = useCallback((key, value) => {
     setCsv((current) => (current ? { ...current, [key]: value } : current))
   }, [])
@@ -356,6 +372,7 @@ export function useSorterApp(auth, demo = null) {
     loadCsv,
     setCsvColumn,
     setCsvOption,
+    toggleSuggestion,
     targetTracks,
     previewRows,
     movingCount,

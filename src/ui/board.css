@@ -862,3 +862,43 @@
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* ---- Fuzzy suggestion review ------------------------------------------ */
+
+.suggestion {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 11px 12px;
+  background: linear-gradient(180deg, var(--board-lit) 0 50%, var(--board) 50% 100%);
+  border-bottom: 1px solid var(--seam);
+}
+
+.suggestion:last-child {
+  border-bottom: 0;
+}
+
+.suggestion-target {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78rem;
+  color: var(--flap-faint);
+}
+
+.suggestion-target strong {
+  color: var(--flap-dim);
+  font-weight: 500;
+}
+
+.suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.suggestion-actions .option {
+  border: 1px solid var(--rule);
+}

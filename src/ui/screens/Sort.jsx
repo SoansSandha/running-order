@@ -45,6 +45,7 @@ export function SortScreen({ app }) {
     loadCsv,
     setCsvColumn,
     setCsvOption,
+    toggleSuggestion,
     setScreen,
     targetTracks,
   } = app
@@ -124,6 +125,7 @@ export function SortScreen({ app }) {
               onPick={loadCsv}
               onColumn={setCsvColumn}
               onOption={setCsvOption}
+              onToggleSuggestion={toggleSuggestion}
             />
           ) : (
             <StrategyOptions strategy={strategy} options={options} setOption={setOption} />
@@ -215,7 +217,7 @@ function StrategyOptions({ strategy, options, setOption }) {
   )
 }
 
-function CsvPanel({ csv, report, fileInput, onPick, onColumn, onOption }) {
+function CsvPanel({ csv, report, fileInput, onPick, onColumn, onOption, onToggleSuggestion }) {
   return (
     <div>
       <p className="col-label" style={{ marginBottom: 10 }}>
@@ -300,8 +302,66 @@ function CsvPanel({ csv, report, fileInput, onPick, onColumn, onOption }) {
           </div>
 
           {report ? <CsvReport report={report} /> : null}
+
+          {report?.suggestions?.length ? (
+            <SuggestionReview
+              suggestions={report.suggestions}
+              accepted={csv.accepted ?? []}
+              onToggle={onToggleSuggestion}
+            />
+          ) : null}
         </>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * Near-miss rows. These are never applied on their own — the matcher only
+ * proposes them, and nothing moves until one is accepted here.
+ */
+function SuggestionReview({ suggestions, accepted, onToggle }) {
+  return (
+    <div style={{ marginTop: 26 }}>
+      <p className="col-label" style={{ marginBottom: 10 }}>
+        Needs review · {suggestions.length}
+      </p>
+      <p className="prose" style={{ fontSize: '0.84rem', marginTop: 0, marginBottom: 12 }}>
+        Close matches the file did not name exactly. Accept one and it takes its
+        place in the CSV order; leave it and that track keeps its slot.
+      </p>
+
+      <div className="peek">
+        {suggestions.map((suggestion) => {
+          const isAccepted = accepted.includes(suggestion.rowIndex)
+          return (
+            <div className="suggestion" key={suggestion.rowIndex}>
+              <div style={{ minWidth: 0 }}>
+                <span className="peek-title">{suggestion.title || '(no title)'}</span>
+                <span className="peek-artist" style={{ display: 'block' }}>
+                  {suggestion.artist}
+                </span>
+                <span className="suggestion-target">
+                  matches <strong>{titleOf(suggestion.track)}</strong> ·{' '}
+                  {artistsOf(suggestion.track)}
+                </span>
+              </div>
+
+              <div className="suggestion-actions">
+                <span className="chip">{Math.round(suggestion.score * 100)}%</span>
+                <button
+                  type="button"
+                  className="option"
+                  aria-pressed={isAccepted}
+                  onClick={() => onToggle(suggestion.rowIndex)}
+                >
+                  {isAccepted ? 'Accepted' : 'Accept'}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

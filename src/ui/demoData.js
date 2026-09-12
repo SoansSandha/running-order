@@ -164,6 +164,41 @@ export function loadDemo() {
         ? (tracks.find((track) => track.isUnavailable || track.isLocal)?.originalIndex ?? null)
         : null,
     ...progressState(params.get('progress'), tracks),
+    ...(params.has('csv') ? { csv: demoCsv(tracks), strategyId: 'csv' } : {}),
+  }
+}
+
+/**
+ * A CSV built from the playlist itself, with three titles deliberately
+ * mistyped so they land in the fuzzy tier, and two rows that match nothing.
+ * Without it the suggestion review has no state to render.
+ */
+function demoCsv(tracks) {
+  const picks = [12, 3, 27, 8, 19, 31, 5, 22, 14, 9, 36, 1]
+    .map((index) => tracks[index])
+    .filter((track) => track && !track.isUnavailable)
+
+  const typo = (text) => text.replace(/[aeiou]/, (vowel) => (vowel === 'a' ? 'e' : 'a'))
+
+  const rows = [['Track Name', 'Artist Name(s)']]
+  picks.forEach((track, position) => {
+    const misspell = position === 1 || position === 4 || position === 7
+    rows.push([
+      misspell ? typo(track.name) : track.name,
+      track.artists.map((entry) => entry.name).join(', '),
+    ])
+  })
+  rows.push(['A Song Not In This Playlist', 'Someone Else'])
+  rows.push(['Another Missing One', 'Nobody'])
+
+  return {
+    fileName: 'exportify-long-drive.csv',
+    rows,
+    columns: { uri: null, isrc: null, title: 0, artist: 1, album: null },
+    hasHeader: true,
+    headers: rows[0],
+    unmatchedPosition: 'bottom',
+    accepted: [],
   }
 }
 

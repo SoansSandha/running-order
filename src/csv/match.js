@@ -89,7 +89,16 @@ export function matchCsvToTracks(rows, tracks, { columns, hasHeader = false } = 
 
     const suggestion = findSuggestion(csv, tracks, claimed)
     if (suggestion) {
-      suggestions.push({ rowIndex, track: tracks[suggestion.trackIndex], tier: 'fuzzy', score: suggestion.score })
+      suggestions.push({
+        rowIndex,
+        track: tracks[suggestion.trackIndex],
+        tier: 'fuzzy',
+        score: suggestion.score,
+        // The row's own text, so a review UI can show what the CSV asked for
+        // beside what it would be matched to.
+        title: csv.rawTitle,
+        artist: csv.artistRaw,
+      })
       continue
     }
 

@@ -140,6 +140,14 @@ describe('fuzzy tier', () => {
     expect(result.suggestions[0].score).toBeLessThanOrEqual(1)
   })
 
+  test('carries the row text, so a review UI can show what the CSV asked for', () => {
+    const result = matchCsvToTracks([['Bohemian Rapsody', 'Queen']], tracks, TITLE_ARTIST)
+    expect(result.suggestions[0]).toMatchObject({
+      title: 'Bohemian Rapsody',
+      artist: 'Queen',
+    })
+  })
+
   test('does not suggest anything for a genuinely different title', () => {
     const result = matchCsvToTracks([['Radio Ga Ga', 'Queen']], tracks, TITLE_ARTIST)
     expect(result.suggestions).toHaveLength(0)
