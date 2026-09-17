@@ -1,11 +1,13 @@
 # Status
 
-**Last updated:** 2026-09-12 · **HEAD:** `see git log`
+**Last updated:** 2026-09-16 · **HEAD:** `see git log`
 
-Design and decisions: [2026-09-09-spotify-playlist-sorter-design.md](2026-09-09-spotify-playlist-sorter-design.md).
+Design and decisions: [2026-09-09-design.md](2026-09-09-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
 Direction contract: `.impeccable/surfaces/src-app-jsx.md`.
 Design system: [../DESIGN.md](../DESIGN.md).
+
+Planned work: [ROADMAP.md](ROADMAP.md).
 
 This file tracks only what is built and what is next.
 
@@ -13,14 +15,21 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **273 tests across 18 files,
+All logic layers and all five screens are built. **291 tests across 18 files,
 all passing.** Build clean, design detector clean, working tree clean.
+
+The project was renamed from `spotify-playlist-sorter` to **Running Order**
+when YouTube Music support and cross-service reconciliation entered scope —
+a Spotify-specific name would not have survived it.
 
 **The design review has run to a clean verdict and `DESIGN.md` is written, so
 the direction contract's FINISH line is discharged.** Eight review rounds ran;
 the last closed with no open findings.
 
-Nothing has run against the live Spotify API. That needs a Client ID.
+**Live status:** reads work. A 414-track playlist has been fetched, sorted,
+previewed and diffed against the real API. Writes are unproven — clone-and-sort
+returned 403 on playlist creation, and the in-place reorder path has not been
+run at all. Both are the next thing to settle.
 
 ---
 
@@ -135,9 +144,10 @@ DESIGN.md records these as build gaps rather than system rules.
 
 | # | Work | Notes |
 |---|---|---|
-| 1 | Resuming an interrupted run | Designed in §9.1. The undo snapshot is written and restorable, but "a tab died mid-run" detection on next load is not wired |
-| 2 | Dry-run detail | Reports a count; does not list the operations |
-| 3 | Live API verification | Nothing has touched real Spotify. First run against a real playlist is the real test |
+| 1 | **Proving the write path** | `PUT .../items` (reorder) has never run live. `POST` to create a playlist returned 403, and now tries `/me/playlists` before the legacy user path — untested |
+| 2 | Resuming an interrupted run | The undo snapshot is written and restorable, but "a tab died mid-run" detection on next load is not wired |
+| 3 | Dry-run detail | Reports a count; does not list the operations |
+| 4 | YouTube Music, cross-service sync | See [ROADMAP.md](ROADMAP.md) |
 
 ---
 

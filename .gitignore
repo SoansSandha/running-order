@@ -23,8 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 
-# Agent tooling
+# Agent tooling — kept on disk, not shipped. These are vendored skill files
+# rather than project source, and they outweigh the project ~30 to 1.
 .agents
+.claude
 .codex
 .impeccable
 skills-lock.json

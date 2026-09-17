@@ -1,7 +1,9 @@
 {
-  "name": "spotify-playlist-sorter",
+  "name": "running-order",
+  "version": "0.1.0",
+  "description": "Sort a Spotify playlist into a lasting order, without losing when you added anything.",
+  "license": "MIT",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

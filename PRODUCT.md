@@ -8,9 +8,11 @@ web
 
 ## Users
 
-One user: the author, managing their own Spotify library from their own
-machine. There is no second audience — no sharing, no sign-up, no onboarding
-for strangers. Confirmed 2026-09-09.
+One user at a time: someone managing their own music library from their own
+machine, running their own copy. The source is public, so a stranger may
+clone and self-host it, but there is no hosted service, no sign-up, and no
+multi-tenancy — each person supplies their own API credentials and their own
+browser holds their own tokens.
 
 The job is deliberate library maintenance rather than listening. The user sits
 down having decided a playlist's order is wrong, picks how it should be
@@ -21,8 +23,10 @@ Used on desktop and phone equally. Neither is the fallback case.
 
 ## Product Purpose
 
-Rewrite the track order of a Spotify playlist, either in place or into a
-cloned copy, using a chosen sort strategy or an uploaded CSV.
+Rewrite the track order of a playlist, either in place or into a cloned copy,
+using a chosen sort strategy or an uploaded CSV. Spotify is supported today;
+YouTube Music is planned, along with reconciling the same playlist across both
+services.
 
 Spotify itself offers no persistent reordering: its own sort views are
 display-only, and its shuffle cannot be captured. The only way to impose a
@@ -96,7 +100,7 @@ Product facts that stay true regardless of implementation:
 
 ## Evidence on Hand
 
-- Full design record at `docs/2026-09-09-spotify-playlist-sorter-design.md`,
+- Full design record at `docs/2026-09-09-design.md`,
   including the decision log D1–D9 and the alternatives considered.
 - Build and test status at `docs/STATUS.md`.
 - Test fixtures at `src/test/factory.js` build synthetic playlists through the
@@ -106,6 +110,22 @@ Absences that must not be papered over: no Spotify credentials have been used
 yet, so nothing has run against the live API. There are no real playlist
 captures, no screenshots, and no performance measurements. Any figure about
 real-world timing or playlist content would be invented.
+
+## Planned, not built
+
+Recorded so the shape of the work is clear, and so nothing here is mistaken
+for something that exists.
+
+- **YouTube Music as a second source**, with the same sort strategies. The
+  pure layers (`sort/`, `plan/`, `csv/`) are already service-agnostic — they
+  operate on a normalized Track, not on anything Spotify-shaped.
+- **Cross-service reconciliation.** Pick the same playlist on both services
+  and see what each is missing, then sync in either direction.
+- **Confirmation before any cross-service write.** Matching songs across
+  services is guesswork in a way that matching within one service is not, so
+  every proposed pair carries a link to play on each side, is confirmed one
+  at a time, and offers a confirm-all for when the list is obviously right.
+  Nothing crosses services unconfirmed.
 
 ## Product Principles
 
@@ -122,3 +142,6 @@ real-world timing or playlist content would be invented.
 5. **Slow is acceptable; surprising is not.** A two-minute reorder with
    visible progress and a working cancel beats an instant one that loses
    metadata.
+6. **A guess is never applied as a fact.** Within one service, an identifier
+   match is certain and can be acted on. Across services there is no shared
+   identifier, so a match is a proposal until a person confirms it.
