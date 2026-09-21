@@ -25,7 +25,7 @@ export async function executeClone({
   const skipped = { localFiles: 0, unavailable: 0, names: [] }
 
   for (const track of targetTracks) {
-    if (track.isUnavailable || !track.uri) {
+    if (track.isUnavailable || !writer.canWrite(track)) {
       skipped.unavailable += 1
       skipped.names.push(track.name || 'Unavailable track')
     } else if (track.isLocal) {

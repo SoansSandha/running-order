@@ -62,4 +62,15 @@ describe('createSpotifyWriter', () => {
     })
     expect(playlist).toEqual({ id: 'new-playlist' })
   })
+
+  test('canWrite is true for a track with a uri', () => {
+    const writer = createSpotifyWriter(fakeClient())
+    const [track] = makeTracks([{ name: 'one' }])
+    expect(writer.canWrite(track)).toBe(true)
+  })
+
+  test('canWrite is false for a track with no uri', () => {
+    const writer = createSpotifyWriter(fakeClient())
+    expect(writer.canWrite({ name: 'no uri' })).toBe(false)
+  })
 })

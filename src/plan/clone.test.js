@@ -8,6 +8,7 @@ function fakeWriter() {
   const added = []
   return {
     added,
+    canWrite: (track) => Boolean(track.uri),
     createPlaylist: vi.fn(async (ownerId, { name, description, isPublic }) => ({
       id: 'clone-1',
       name,

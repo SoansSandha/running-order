@@ -31,5 +31,14 @@ export function createSpotifyWriter(client) {
         { onProgress },
       )
     },
+
+    /**
+     * Whether this service can add `track` to a playlist. The planner must
+     * not ask a service-specific question like "does it have a uri" itself —
+     * that knowledge belongs to the writer.
+     */
+    canWrite(track) {
+      return Boolean(track.uri)
+    },
   }
 }
