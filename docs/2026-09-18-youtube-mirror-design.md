@@ -502,3 +502,28 @@ question dissolved with the Data API.
 - **Does playlist *editing* work under OAuth?** Uploads are the only carve-out
   the docs name, so it should. "Should" is not "does", and it is the first
   thing 2a proves.
+
+### Carried forward from the write-seam branch (2026-09-20)
+
+Plan 1 built the writer seam. Its final review found the seam is structurally
+clean — `src/plan/` imports no service — but **not yet sufficient for a second
+writer**, in one specific way. Recorded here rather than left in a scratch
+ledger, because it is a precondition for 2a rather than a defect in what
+shipped.
+
+- **A writer cannot resolve `op.key` to a service item id.** `executeReorder`
+  keys its plan on `track.originalIndex`, so a YouTube writer receives
+  `{ key: 7, beforeKey: 3 }` and has no way to reach the `setVideoId` it must
+  actually send. Deferred deliberately: keying by `itemId` instead makes
+  `null` ambiguous the moment a track has no `setVideoId` (it is already the
+  `beforeKey` end-of-list sentinel), and `diff.js`'s correctness rests on key
+  uniqueness, which `itemId` has not been shown to have. §6 adds `Track.itemId`
+  in 2a — that is when this gets decided against a real writer instead of a
+  guessed one. **Settle it before writing the YouTube writer, not after.**
+- **`clone.test.js` asserts Spotify's 100-item batch boundaries** through the
+  now service-neutral seam. The neutral contract requires no particular batch
+  size, so when a second writer lands this should become "onProgress is
+  forwarded, and the final call is `(total, total)`".
+- **`csv/detectColumns.js` and `csv/match.js` still hardcode Spotify URI
+  patterns** (§4 named this). The mirror path does not need them, so it stays
+  out of scope — but CSV-driven ordering of a YouTube playlist would.
