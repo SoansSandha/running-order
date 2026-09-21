@@ -4,7 +4,7 @@
  * See docs design §5.4.
  */
 
-import { normalizePlaylistItem } from '../model/track.js'
+import { normalizePlaylistItem } from '../../model/track.js'
 import { playlistItemsPath, playlistTrackCount } from './endpoints.js'
 
 const PLAYLIST_PAGE_SIZE = 50

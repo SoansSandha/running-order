@@ -12,7 +12,7 @@ import {
   getCurrentUser,
   getPlaylistSnapshot,
   listEditablePlaylists,
-} from '../api/playlists.js'
+} from '../services/spotify/playlists.js'
 import { buildCsvOrder } from '../csv/order.js'
 import { detectColumns } from '../csv/detectColumns.js'
 import { matchCsvToTracks } from '../csv/match.js'

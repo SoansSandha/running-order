@@ -11,7 +11,7 @@
  * created.
  */
 
-import { addTracksInChunks, createPlaylist } from '../api/mutations.js'
+import { addTracksInChunks, createPlaylist } from '../services/spotify/mutations.js'
 
 export async function executeClone({
   client,

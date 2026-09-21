@@ -6,7 +6,7 @@
  * parallelised however slow that makes a large sort.
  */
 
-import { reorderTrack } from '../api/mutations.js'
+import { reorderTrack } from '../services/spotify/mutations.js'
 import { applyMoveOps, buildMoveOps } from './diff.js'
 
 /**

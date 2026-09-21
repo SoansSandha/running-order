@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createClient } from '../api/client.js'
+import { createClient } from '../services/spotify/client.js'
 import { recordApiEvent } from '../ui/apiLog.js'
 import { createCodeChallenge, createCodeVerifier, randomState } from './pkce.js'
 import {
@@ -15,7 +15,7 @@ import {
   currentRedirectUri,
   exchangeCodeForTokens,
   refreshTokens,
-} from './spotifyAuth.js'
+} from '../services/spotify/spotifyAuth.js'
 
 const CLIENT_ID_KEY = 'playlist-sorter:client-id'
 const REFRESH_KEY = 'playlist-sorter:refresh-token'

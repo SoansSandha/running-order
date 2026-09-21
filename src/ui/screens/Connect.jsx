@@ -7,7 +7,7 @@
  * page where this app never gets a chance to explain.
  */
 
-import { currentRedirectUri, describeOriginProblem } from '../../auth/spotifyAuth.js'
+import { currentRedirectUri, describeOriginProblem } from '../../services/spotify/spotifyAuth.js'
 import { CopyStrip, Frame, Head, Lever, LeverRow, Notice } from '../components/chrome.jsx'
 
 export function ConnectScreen({ auth }) {
