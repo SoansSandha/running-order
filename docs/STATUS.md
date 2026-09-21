@@ -15,7 +15,7 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **291 tests across 18 files,
+All logic layers and all five screens are built. **300 tests across 19 files,
 all passing.** Build clean, design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
@@ -39,10 +39,10 @@ run at all. Both are the next thing to settle.
 |---|---|---|
 | `src/model/` | `normalize.js`, `track.js` | 28 |
 | `src/sort/` | Nine strategies behind one registry | 59 |
-| `src/plan/` | `diff.js`, `undo.js`, `execute.js`, `clone.js` | 62 |
+| `src/plan/` | `diff.js`, `undo.js`, `execute.js`, `clone.js` | 57 |
 | `src/csv/` | `parse.js`, `detectColumns.js`, `match.js`, `order.js` | 83 |
-| `src/api/` | `client.js`, `playlists.js`, `mutations.js` | 41 |
-| `src/auth/` | `pkce.js`, `spotifyAuth.js`, `useAuth.js` | 18 |
+| `src/services/spotify/` | `client.js`, `playlists.js`, `mutations.js`, `spotifyAuth.js`, `writer.js` | 69 |
+| `src/auth/` | `pkce.js`, `useAuth.js` | 7 |
 | `src/ui/` | Five screens, board components, app state | — |
 
 ### Load-bearing details worth not rediscovering
@@ -223,8 +223,9 @@ Forbidden` for this app.
 Both symptoms had one cause: every playlist read as 0 tracks because the
 count was read from a field that no longer exists, and opening one failed
 because the endpoint had moved. Reads and writes now target `/items`, kept in
-`src/api/endpoints.js` so a path Spotify has moved once can be moved again in
-one place. The count reads `items.total` and falls back to `tracks.total`.
+`src/services/spotify/endpoints.js` so a path Spotify has moved once can be
+moved again in one place. The count reads `items.total` and falls back to
+`tracks.total`.
 
 ### One bug the test suite could not have caught
 

@@ -176,17 +176,11 @@ describe('neutral move ops', () => {
       return model
     }
 
-    let seed = 7
-    const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648
-
+    const rng = mulberry32(7)
     for (let round = 0; round < 300; round++) {
-      const size = 2 + Math.floor(random() * 30)
-      const current = Array.from({ length: size }, (_, i) => `k${i}`)
-      const target = [...current]
-      for (let i = size - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1))
-        ;[target[i], target[j]] = [target[j], target[i]]
-      }
+      const size = 2 + Math.floor(rng() * 30)
+      const current = range(size).map((i) => `k${i}`)
+      const target = shuffled(current, rng)
       expect(applyNeutral(current, buildMoveOps(current, target))).toEqual(target)
     }
   })

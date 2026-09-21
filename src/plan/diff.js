@@ -35,6 +35,9 @@ export function applyMoveOps(items, ops) {
  *   `insertBefore` in PRE-removal indexing. `key`/`beforeKey` are the same
  *   move stated without indices, for services that move by item identity.
  *   `beforeKey === null` means "to the end".
+ *   Keys must be unique and non-null: `null` is reserved as the `beforeKey`
+ *   end-of-list sentinel, so a caller keying by something other than
+ *   `originalIndex` (e.g. a service item id) must not pass `null` as a key.
  */
 export function buildMoveOps(current, target) {
   const size = current.length
