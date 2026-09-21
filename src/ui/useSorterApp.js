@@ -21,12 +21,14 @@ import { executeClone } from '../plan/clone.js'
 import { applyMoveOps, buildMoveOps } from '../plan/diff.js'
 import { executeReorder } from '../plan/execute.js'
 import { buildRestoreOrder, createSnapshot, loadSnapshot, saveSnapshot } from '../plan/undo.js'
+import { createSpotifyWriter } from '../services/spotify/writer.js'
 import { defaultOptionsFor, sortTracks, strategyById } from '../sort/index.js'
 
 export const CSV_STRATEGY = 'csv'
 
 export function useSorterApp(auth, demo = null) {
   const { client } = auth
+  const writer = useMemo(() => createSpotifyWriter(client), [client])
 
   const [screen, setScreen] = useState(demo?.screen ?? 'playlists')
   const [me, setMe] = useState(demo?.me ?? null)
@@ -254,7 +256,7 @@ export function useSorterApp(auth, demo = null) {
         if (!dryRun) saveSnapshot(createSnapshot({ ...playlist, snapshotId: live }, tracks))
 
         const result = await executeReorder({
-          client,
+          writer,
           playlistId: playlist.id,
           currentTracks: tracks,
           targetTracks,
@@ -287,7 +289,7 @@ export function useSorterApp(auth, demo = null) {
         })
       }
     },
-    [client, playlist, tracks, targetTracks, ops, movedKeys],
+    [client, writer, playlist, tracks, targetTracks, ops, movedKeys],
   )
 
   const applyClone = useCallback(
@@ -335,7 +337,7 @@ export function useSorterApp(auth, demo = null) {
       const restored = buildRestoreOrder(fresh, snapshot)
       const live = await getPlaylistSnapshot(client, playlist.id)
       const result = await executeReorder({
-        client,
+        writer,
         playlistId: playlist.id,
         currentTracks: fresh,
         targetTracks: restored,
@@ -350,7 +352,7 @@ export function useSorterApp(auth, demo = null) {
       setRun(null)
       setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
     }
-  }, [client, playlist])
+  }, [client, writer, playlist])
 
   return {
     screen,
