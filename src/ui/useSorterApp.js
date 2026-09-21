@@ -302,7 +302,7 @@ export function useSorterApp(auth, demo = null) {
 
       try {
         const result = await executeClone({
-          client,
+          writer,
           userId: me.id,
           sourcePlaylist: playlist,
           targetTracks,
@@ -317,7 +317,7 @@ export function useSorterApp(auth, demo = null) {
         setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
       }
     },
-    [client, playlist, me, targetTracks, strategyLabel],
+    [writer, playlist, me, targetTracks, strategyLabel],
   )
 
   const cancelRun = useCallback(() => abort.current?.abort(), [])

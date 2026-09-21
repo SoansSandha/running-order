@@ -11,10 +11,8 @@
  * created.
  */
 
-import { addTracksInChunks, createPlaylist } from '../services/spotify/mutations.js'
-
 export async function executeClone({
-  client,
+  writer,
   userId,
   sourcePlaylist,
   targetTracks,
@@ -48,18 +46,13 @@ export async function executeClone({
     }
   }
 
-  const playlist = await createPlaylist(client, userId, {
+  const playlist = await writer.createPlaylist(userId, {
     name: `${sourcePlaylist.name} (sorted by ${strategyLabel})`,
     description: `Sorted copy of "${sourcePlaylist.name}" by ${strategyLabel}, ${formatToday()}.`,
     isPublic,
   })
 
-  await addTracksInChunks(
-    client,
-    playlist.id,
-    cloneable.map((track) => track.uri),
-    { onProgress },
-  )
+  await writer.addTracks(playlist.id, cloneable, { onProgress })
 
   return {
     playlist,

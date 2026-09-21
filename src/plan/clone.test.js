@@ -2,13 +2,26 @@ import { describe, expect, test, vi } from 'vitest'
 import { makeTracks, makeUnavailable } from '../test/factory.js'
 import { executeClone } from './clone.js'
 
-function fakeClient() {
-  const calls = []
+const CHUNK_SIZE = 100
+
+function fakeWriter() {
+  const added = []
   return {
-    calls,
-    post: vi.fn(async (path, options) => {
-      calls.push({ path, body: options.body })
-      return path.endsWith('/playlists') ? { id: 'new1', name: options.body.name } : {}
+    added,
+    createPlaylist: vi.fn(async (ownerId, { name, description, isPublic }) => ({
+      id: 'clone-1',
+      name,
+      description,
+      public: isPublic,
+    })),
+    // Chunks progress the same way the real Spotify writer does, so tests
+    // exercising onProgress see the same call sequence as production.
+    addTracks: vi.fn(async (playlistId, tracks, { onProgress } = {}) => {
+      added.push(...tracks)
+      for (let start = 0; start < tracks.length; start += CHUNK_SIZE) {
+        const done = Math.min(start + CHUNK_SIZE, tracks.length)
+        onProgress?.(done, tracks.length)
+      }
     }),
   }
 }
@@ -17,9 +30,9 @@ const source = { id: 'p1', name: 'Road Trip' }
 
 describe('executeClone', () => {
   test('creates a playlist named after the source and the strategy', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: makeTracks([{ name: 'a' }]),
@@ -27,54 +40,58 @@ describe('executeClone', () => {
     })
     // Which endpoint serves the create is mutations' business, not the
     // clone flow's — asserted in mutations.test.js.
-    expect(client.calls[0].body.name).toBe('Road Trip (sorted by Artist)')
+    expect(writer.createPlaylist.mock.calls[0][1].name).toBe('Road Trip (sorted by Artist)')
   })
 
   test('records the source and strategy in the description', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: makeTracks([{ name: 'a' }]),
       strategyLabel: 'Artist',
     })
-    expect(client.calls[0].body.description).toContain('Road Trip')
-    expect(client.calls[0].body.description).toContain('Artist')
+    expect(writer.createPlaylist.mock.calls[0][1].description).toContain('Road Trip')
+    expect(writer.createPlaylist.mock.calls[0][1].description).toContain('Artist')
   })
 
   test('creates the clone private by default', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: makeTracks([{ name: 'a' }]),
       strategyLabel: 'Artist',
     })
-    expect(client.calls[0].body.public).toBe(false)
+    expect(writer.createPlaylist.mock.calls[0][1].isPublic).toBe(false)
   })
 
   test('adds tracks in the target order', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     const tracks = makeTracks([{ name: 'a' }, { name: 'b' }, { name: 'c' }])
     const result = await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: [tracks[2], tracks[0], tracks[1]],
       strategyLabel: 'Title',
     })
-    expect(client.calls[1].body.uris).toEqual([tracks[2].uri, tracks[0].uri, tracks[1].uri])
+    expect(writer.added.map((track) => track.uri)).toEqual([
+      tracks[2].uri,
+      tracks[0].uri,
+      tracks[1].uri,
+    ])
     expect(result.added).toBe(3)
   })
 
   test('reports progress while adding', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     const tracks = makeTracks(Array.from({ length: 150 }, (_, i) => ({ name: `t${i}` })))
     const seen = []
     await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: tracks,
@@ -89,27 +106,27 @@ describe('tracks that cannot be cloned', () => {
   test('leaves out unavailable tracks and names them in the report', async () => {
     // A clone can legitimately be shorter than its source. That has to be
     // stated before the clone, not discovered afterwards.
-    const client = fakeClient()
+    const writer = fakeWriter()
     const tracks = makeTracks([{ name: 'ok' }])
     const result = await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: [tracks[0], makeUnavailable(1)],
       strategyLabel: 'Title',
     })
-    expect(client.calls[1].body.uris).toEqual([tracks[0].uri])
+    expect(writer.added.map((track) => track.uri)).toEqual([tracks[0].uri])
     expect(result.skipped.unavailable).toBe(1)
   })
 
   test('leaves out local files and names them in the report', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     const tracks = makeTracks([
       { name: 'ok' },
       { name: 'local one', isLocal: true },
     ])
     const result = await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: tracks,
@@ -120,10 +137,10 @@ describe('tracks that cannot be cloned', () => {
   })
 
   test('reports the shortfall between source and clone', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     const tracks = makeTracks([{ name: 'ok' }])
     const result = await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: [tracks[0], makeUnavailable(1), makeUnavailable(2)],
@@ -136,23 +153,24 @@ describe('tracks that cannot be cloned', () => {
 
 describe('dry run', () => {
   test('creates nothing and sends nothing', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: makeTracks([{ name: 'a' }]),
       strategyLabel: 'Title',
       dryRun: true,
     })
-    expect(client.post).not.toHaveBeenCalled()
+    expect(writer.createPlaylist).not.toHaveBeenCalled()
+    expect(writer.addTracks).not.toHaveBeenCalled()
   })
 
   test('still reports what would be added and skipped', async () => {
-    const client = fakeClient()
+    const writer = fakeWriter()
     const tracks = makeTracks([{ name: 'a' }])
     const result = await executeClone({
-      client,
+      writer,
       userId: 'u1',
       sourcePlaylist: source,
       targetTracks: [tracks[0], makeUnavailable(1)],
