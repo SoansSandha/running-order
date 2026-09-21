@@ -171,13 +171,17 @@ Not yet proven: the in-place write path and clone-and-sort have not completed
 successfully against the live API. See [`docs/STATUS.md`](docs/STATUS.md) for
 exactly what has and has not been run.
 
-**Planned** — see [`docs/ROADMAP.md`](docs/ROADMAP.md):
+**Planned** — see
+[`docs/2026-09-18-youtube-mirror-design.md`](docs/2026-09-18-youtube-mirror-design.md):
 
-- YouTube Music as a second source, with the same sort strategies
-- Reconciling one playlist across both services: what each is missing, synced
-  either way
-- Confirmation before any cross-service write, with a link to play each side,
-  one at a time or all at once
+- **Mirroring a playlist onto YouTube Music.** Spotify stays canonical and
+  sorting keeps happening there, because YouTube Music does not expose the
+  metadata half these strategies need. A YouTube playlist is then made to
+  match: missing tracks added, the rest reordered.
+- **Confirmation before any cross-service write.** There is no shared
+  identifier between the two services, so every match is a proposal — shown
+  side by side with a link to play each, confirmed one at a time or in bulk
+  where the evidence is strong. Nothing on YouTube is ever deleted.
 
 ---
 
