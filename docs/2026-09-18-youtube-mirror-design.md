@@ -274,6 +274,22 @@ process is required, and that is unchanged. It sharpens the credential
 argument rather than removing it: session cookies are *more* sensitive than a
 client secret would have been, and they now never reach the browser at all.
 
+### The bind address is the only control (decide before 2c)
+
+CORS constrains **browsers only**. It does not stop `curl`, another local
+process, or anything that is not a browser honouring it. So every bit of the
+proxy's protection currently rests on binding `127.0.0.1` — there is no second
+layer, no shared-secret header, no token.
+
+That is proportionate while the proxy is read-only on one machine. It stops
+being proportionate when 2c gives it endpoints that **write to a playlist**,
+because at that point any local process can reorder or add to the user's
+library by calling an unauthenticated localhost port.
+
+Decide this deliberately before the first write endpoint ships: either accept
+it explicitly, or add a shared secret the Vite app sends and the proxy checks.
+Raised by the Task 3 security review, 2026-09-22.
+
 ### When the proxy is not running
 
 Spotify-only use must not degrade. The app probes `/auth/status` once, and a

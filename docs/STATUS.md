@@ -57,6 +57,9 @@ playlist), undo, and mid-run cancel.
 | `src/services/spotify/` | `client.js`, `playlists.js`, `mutations.js`, `spotifyAuth.js`, `writer.js` | 69 |
 | `src/auth/` | `pkce.js`, `useAuth.js` | 7 |
 | `src/ui/` | Five screens, board components, app state | — |
+| `proxy/` | `app.py` — local FastAPI proxy for YouTube Music | 3 (pytest) |
+
+**304 JavaScript tests, 3 Python tests.**
 
 ### Load-bearing details worth not rediscovering
 
@@ -150,6 +153,66 @@ titles (only the position numerals flap), no grain on the "enamelled" board
 body, and Connect's empty field is plain ground rather than blank flaps
 (it has no scroller, and banding behind centred copy reads as a backdrop).
 DESIGN.md records these as build gaps rather than system rules.
+
+---
+
+## YouTube Music: in progress
+
+Branch `youtube-mirror-2a`. Design: [2026-09-18-youtube-mirror-design.md](2026-09-18-youtube-mirror-design.md).
+Plan: [2026-09-22-youtube-read-path.md](superpowers/plans/2026-09-22-youtube-read-path.md).
+
+Paused after Task 3 of 6. Everything below is committed, reviewed and green.
+
+| Task | State |
+|---|---|
+| 1 — `keyOf` on `executeReorder` | **Done.** The planner can key a move plan on a service's own per-item id |
+| 2 — `source` / `itemId` on Track | **Done.** 23-key Track shape, ready for a second normalizer |
+| 3 — Proxy scaffold + auth status | **Done.** FastAPI on `127.0.0.1:8787`, CORS-locked, credentials proven to load |
+| 4 — Proxy playlist endpoints | Not started. Brief written |
+| 5 — JS client for the proxy | Not started |
+| 6 — YouTube → Track normalizer | Not started |
+
+### What the live spike established
+
+Measured against the real 379-track library on 2026-09-22, not taken from docs.
+Three of these contradicted the documentation:
+
+| | |
+|---|---|
+| `setVideoId` | Present on 379/379, **379 distinct** — safe to key a reorder on. This is what unblocked Task 1 |
+| `trackCount` vs items returned | **382 vs 379.** Three items are counted and never returned |
+| `get_playlist` default | Returned **200**, not the 100 the signature implies |
+| `album` | Absent on **151 of 379** rows — the album sort is worse than "no track number" |
+| `videoType` | `ATV` 224, `OMV` 132, `UGC` 10, untyped 13 |
+| Field set | Varies by row — `feedbackTokens` exists on album tracks, absent on videos and uploads |
+
+### Authentication: browser credentials, not OAuth
+
+OAuth dead-ends for a local single-user tool. Google expires refresh tokens
+after **7 days** for any External app in Testing status, and `youtube` is not
+an exempt scope; publishing to Production needs a home page, privacy policy
+and a verifiable authorised domain. Browser auth needs no Google Cloud project
+and lasts roughly two years. Recorded as D22 with the evidence.
+
+`ytmusicapi` labels browser auth deprecated, so it is **pinned to `==1.12.3`**.
+Checked rather than assumed: as of that version it is a soft deprecation —
+`auth/browser.py` is fully wired and raises no `DeprecationWarning`.
+
+`proxy/browser.json` is gitignored and holds session cookies. Treat it like a
+password; it is not in the repository and must never be.
+
+### Carried into the next session
+
+- **Security, before write endpoints land (2c):** CORS constrains browsers
+  only — it does not stop `curl`. All protection currently rests on the
+  `127.0.0.1` bind alone, with no second layer such as a shared-secret header.
+  Fine for a local read-only tool; decide deliberately before the proxy can
+  write.
+- **`get_client()` caches at process scope with no lock.** Harmless with one
+  read-only endpoint; a latent race if concurrent handling is added.
+- **Neither `buildMoveOps` nor `executeReorder` enforces non-null keys**, only
+  uniqueness, while `null` is the `beforeKey` end-of-list sentinel. Closed at
+  the boundary instead: Task 6's adapter drops rows with a null `setVideoId`.
 
 ---
 
