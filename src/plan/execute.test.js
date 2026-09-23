@@ -192,3 +192,48 @@ describe('failure', () => {
     ).rejects.toMatchObject({ applied: 2, snapshotId: 'snap-2' })
   })
 })
+
+describe('keyOf', () => {
+  test('defaults to originalIndex', async () => {
+    const writer = fakeWriter()
+    const tracks = playlist(4)
+    await executeReorder({
+      writer,
+      playlistId: 'p1',
+      currentTracks: tracks,
+      targetTracks: [tracks[3], tracks[0], tracks[1], tracks[2]],
+      snapshotId: 'snap-0',
+    })
+    expect(writer.calls[0].op.key).toBe(3)
+  })
+
+  test('uses the supplied key when one is given', async () => {
+    const writer = fakeWriter()
+    const tracks = playlist(4).map((track, i) => ({ ...track, itemId: `sv-${i}` }))
+    await executeReorder({
+      writer,
+      playlistId: 'p1',
+      currentTracks: tracks,
+      targetTracks: [tracks[3], tracks[0], tracks[1], tracks[2]],
+      snapshotId: 'snap-0',
+      keyOf: (track) => track.itemId,
+    })
+    expect(writer.calls[0].op.key).toBe('sv-3')
+    expect(writer.calls[0].op.beforeKey).toBe('sv-0')
+  })
+
+  test('refuses a key function that yields duplicates', async () => {
+    const writer = fakeWriter()
+    const tracks = playlist(3)
+    await expect(
+      executeReorder({
+        writer,
+        playlistId: 'p1',
+        currentTracks: tracks,
+        targetTracks: [tracks[2], tracks[0], tracks[1]],
+        snapshotId: 'snap-0',
+        keyOf: () => 'same',
+      }),
+    ).rejects.toThrow(/unique/)
+  })
+})

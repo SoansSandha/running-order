@@ -30,6 +30,7 @@ export class ReorderFailure extends Error {
  * @param {Array}  args.currentTracks normalized Tracks, current order
  * @param {Array}  args.targetTracks  the same Tracks, desired order
  * @param {string} args.snapshotId    the playlist's snapshot id right now
+ * @param {(track: object) => any} [args.keyOf] per-item identity; must be unique
  * @param {(done: number, total: number) => void} [args.onProgress]
  * @param {AbortSignal} [args.signal]
  * @param {boolean} [args.dryRun]     compute the plan, send nothing
@@ -40,14 +41,17 @@ export async function executeReorder({
   currentTracks,
   targetTracks,
   snapshotId,
+  keyOf = (track) => track.originalIndex,
   onProgress,
   signal,
   dryRun = false,
 }) {
-  // originalIndex, never URI: a playlist may hold the same URI several times,
-  // and positions must stay unambiguous.
-  const currentKeys = currentTracks.map((track) => track.originalIndex)
-  const targetKeys = targetTracks.map((track) => track.originalIndex)
+  // originalIndex by default, never URI: a playlist may hold the same URI
+  // several times, and positions must stay unambiguous. A service whose items
+  // carry their own stable per-item id passes `keyOf` to use that instead —
+  // YouTube's setVideoId, measured unique across a real 379-track playlist.
+  const currentKeys = currentTracks.map(keyOf)
+  const targetKeys = targetTracks.map(keyOf)
   const ops = buildMoveOps(currentKeys, targetKeys)
 
   if (dryRun) {
@@ -56,7 +60,7 @@ export async function executeReorder({
       applied: 0,
       snapshotId,
       cancelled: false,
-      finalOrder: reorderByKeys(currentTracks, applyMoveOps(currentKeys, ops)),
+      finalOrder: reorderByKeys(currentTracks, applyMoveOps(currentKeys, ops), keyOf),
     }
   }
 
@@ -71,7 +75,7 @@ export async function executeReorder({
         applied,
         snapshotId: liveSnapshot,
         cancelled: true,
-        finalOrder: reorderByKeys(currentTracks, mirror),
+        finalOrder: reorderByKeys(currentTracks, mirror, keyOf),
       }
     }
 
@@ -97,11 +101,11 @@ export async function executeReorder({
     applied,
     snapshotId: liveSnapshot,
     cancelled: false,
-    finalOrder: reorderByKeys(currentTracks, mirror),
+    finalOrder: reorderByKeys(currentTracks, mirror, keyOf),
   }
 }
 
-function reorderByKeys(tracks, keys) {
-  const byKey = new Map(tracks.map((track) => [track.originalIndex, track]))
+function reorderByKeys(tracks, keys, keyOf) {
+  const byKey = new Map(tracks.map((track) => [keyOf(track), track]))
   return keys.map((key) => byKey.get(key))
 }
