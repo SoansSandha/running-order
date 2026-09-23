@@ -164,12 +164,18 @@ Architecture, decisions and their rejected alternatives are in
 
 ## Status
 
-Sorting works against real Spotify playlists. Reads, all nine strategies, the
-preview and the CSV pipeline have been exercised on a 414-track library.
+Sorting works against real Spotify playlists, reads and writes both. All nine
+strategies, the preview and the CSV pipeline have been exercised on a
+414-track library, and on 2026-09-22 the write path completed end to end: an
+in-place reorder, a multi-move reorder chaining snapshot ids across every
+write, and clone-and-sort. **`added_at` survived the reorder** — the guarantee
+the product rests on.
 
-Not yet proven: the in-place write path and clone-and-sort have not completed
-successfully against the live API. See [`docs/STATUS.md`](docs/STATUS.md) for
-exactly what has and has not been run.
+Not yet exercised live: a write at full scale — the largest real reorder so
+far is a small playlist, not the 414-track one. The algorithm is property-
+tested against 1,000 tracks, but that is a test, not a live run. Undo and
+mid-run cancel have also not been run against the API. See
+[`docs/STATUS.md`](docs/STATUS.md) for exactly what has and has not been run.
 
 **Planned** — see
 [`docs/2026-09-18-youtube-mirror-design.md`](docs/2026-09-18-youtube-mirror-design.md):
