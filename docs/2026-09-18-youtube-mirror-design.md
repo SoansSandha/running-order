@@ -36,7 +36,7 @@ track carries `videoId`, `setVideoId`, `title`, `artists`, `album`,
 | Sort | On YouTube Music natively |
 |---|---|
 | Artist · Title · Duration · Shuffle · Reverse | Works |
-| Album | Degraded — groups by album, but no track number, so order *within* an album is arbitrary |
+| Album | Badly degraded — no track number, *and* `album` is absent on 40% of tracks (measured: present on 228 of 379 in the real library). Anything sourced from a music video or a user upload carries no album at all |
 | **Date added** | **Absent.** It is the default inner order for the artist sort |
 | Release date | Absent — no per-track release year |
 | Popularity | No equivalent |
@@ -217,7 +217,8 @@ wrong, which is why they are recorded here rather than left to discovery:
 
 | Constraint | Consequence if missed |
 |---|---|
-| `get_playlist(limit=...)` **defaults to 100** | A 414-track playlist silently truncates to 100. The proxy always passes an explicit limit |
+| `get_playlist(limit=...)` truncates by default | Measured against the real 379-track playlist: the default returned **200**, not the 100 the signature suggests — it reads whole pages. Either way it truncates. The proxy always passes `limit=None` |
+| `trackCount` can exceed the items returned | Measured: `trackCount` 382, items returned 379, stable across three fetches. Three items are counted by YouTube but never returned. See "Items that cannot be read" below |
 | A playlist carries a display `sortOrder` (`MANUAL` / `NEWEST_FIRST` / `NEWEST_LAST` / `TOP_VOTED`) | If it is not `MANUAL`, a manual reorder may not be what is displayed. Checked before ordering, and surfaced rather than silently changed |
 | `add_playlist_items(..., duplicates=False)` | The library's own double-add guard. Used, as a second line behind our own |
 | Browser credentials carry session cookies | Full account access — more sensitive than a client secret. Proxy-held, never served to the page |
@@ -296,6 +297,28 @@ its own API directly and has no dependency on the proxy.
 `videoId`. The two are deliberately separate fields because they have
 different lifetimes: `id` is stable, `itemId` is reissued whenever the
 playlist's membership changes. §11 depends on that distinction.
+
+**`setVideoId` is safe to key a reorder on.** Measured against the real
+379-track playlist: present on 379 of 379 rows, and **379 distinct values for
+379 rows**. That is structural rather than lucky — `setVideoId` identifies a
+playlist *item*, so two copies of the same song carry different ones, which is
+exactly the property `videoId` lacks and `diff.js` requires. The adapter must
+still refuse a row whose `setVideoId` is null rather than key on it, because
+`null` is the `beforeKey` end-of-list sentinel (§4).
+
+### Items that cannot be read
+
+The real playlist reports `trackCount` 382 while returning 379 items,
+consistently. Three items are counted and not returned — most likely fully
+deleted videos. They are not the unavailable ones: all five unavailable tracks
+*are* returned, with both ids intact.
+
+This is a "never lose a track" problem, so it gets stated rather than
+absorbed: **the count difference is surfaced before any write** — *"YouTube
+reports 382 items; 379 could be read. 3 cannot be read and will not be
+touched."* Unreadable items are never counted as YouTube-only extras, never
+sunk, and never included in a move plan, because an item we cannot see is one
+we cannot reason about.
 
 A YouTube track normalizes into the same shape as a Spotify one, with the
 absent fields honestly empty rather than invented: no `addedAt`, no
@@ -560,12 +583,16 @@ shipped.
 - **A writer cannot resolve `op.key` to a service item id.** `executeReorder`
   keys its plan on `track.originalIndex`, so a YouTube writer receives
   `{ key: 7, beforeKey: 3 }` and has no way to reach the `setVideoId` it must
-  actually send. Deferred deliberately: keying by `itemId` instead makes
-  `null` ambiguous the moment a track has no `setVideoId` (it is already the
-  `beforeKey` end-of-list sentinel), and `diff.js`'s correctness rests on key
-  uniqueness, which `itemId` has not been shown to have. §6 adds `Track.itemId`
-  in 2a — that is when this gets decided against a real writer instead of a
-  guessed one. **Settle it before writing the YouTube writer, not after.**
+  actually send.
+
+  **Resolved 2026-09-22 against real data, not guessed.** The two objections
+  that caused the deferral both fail on measurement: `setVideoId` is present on
+  379 of 379 rows and holds 379 distinct values, so it has the uniqueness
+  `diff.js` requires, and there are no nulls to collide with the `beforeKey`
+  sentinel. So `executeReorder` gains a `keyOf` option defaulting to
+  `(track) => track.originalIndex`; the YouTube caller passes
+  `(track) => track.itemId`. The adapter rejects a null `setVideoId` at
+  normalization rather than letting it reach the planner.
 - **`clone.test.js` asserts Spotify's 100-item batch boundaries** through the
   now service-neutral seam. The neutral contract requires no particular batch
   size, so when a second writer lands this should become "onProgress is
