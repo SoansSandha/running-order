@@ -31,3 +31,9 @@ dist-ssr
 .impeccable
 skills-lock.json
 .impeccable/review
+
+# The YouTube proxy holds session credentials — never commit them.
+proxy/browser.json
+proxy/.venv/
+proxy/__pycache__/
+proxy/.pytest_cache/
