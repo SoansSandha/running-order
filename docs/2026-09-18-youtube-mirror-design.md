@@ -98,7 +98,7 @@ independently verifiable.
 
 | | Deliverable | Proves | Writes? |
 |---|---|---|---|
-| **2a** | Service boundary, proxy, Google auth, YouTube read-only | The seam, OAuth, and the adapter work | None |
+| **2a** | Service boundary, proxy, YouTube auth, YouTube read-only | The seam, auth, and the adapter work | None |
 | **2b** | Cross-service matching and the confirmation surface | The hard problem | None |
 | **2c** | Mirror execution — fill, then order | Writes, preview, undo | Yes |
 
@@ -192,7 +192,7 @@ Started alongside Vite by `npm run dev`.
 | Route | Purpose |
 |---|---|
 | `GET /auth/status` | Whether a Google credential is present |
-| `POST /auth/begin`, `POST /auth/complete` | ytmusicapi's OAuth flow |
+| `POST /auth/status` | Whether stored browser credentials still authenticate |
 | `GET /playlists` | The user's playlists |
 | `GET /playlists/{id}` | Its tracks |
 | `GET /search` | Song search — candidates for the fill half |
@@ -219,14 +219,39 @@ wrong, which is why they are recorded here rather than left to discovery:
 | `get_playlist(limit=...)` **defaults to 100** | A 414-track playlist silently truncates to 100. The proxy always passes an explicit limit |
 | A playlist carries a display `sortOrder` (`MANUAL` / `NEWEST_FIRST` / `NEWEST_LAST` / `TOP_VOTED`) | If it is not `MANUAL`, a manual reorder may not be what is displayed. Checked before ordering, and surfaced rather than silently changed |
 | `add_playlist_items(..., duplicates=False)` | The library's own double-add guard. Used, as a second line behind our own |
-| OAuth needs a client id **and secret** (Google, since Nov 2024) | A secret cannot live in a browser. It lives in the proxy — see below |
+| Browser credentials carry session cookies | Full account access — more sensitive than a client secret. Proxy-held, never served to the page |
 
-### Why the secret settles the architecture
+### Authentication: browser credentials, not OAuth (D22)
 
-Spotify uses PKCE specifically so there is no secret to protect. Google issues
-one. That makes the proxy not merely convenient but the only correct home for
-the credential: D12 was chosen for CORS, and the credential model independently
-requires the same thing.
+`ytmusicapi` offers two methods. We use **browser authentication** — request
+headers copied once from a logged-in `music.youtube.com` session, stored as
+`browser.json`.
+
+The OAuth route was attempted first and abandoned on evidence. It needs a
+Google Cloud project and a "TVs and Limited Input devices" client, and Google
+issues **refresh tokens that expire after 7 days** for any External app whose
+publishing status is Testing. `youtube` is not in the exempt scope set, so the
+only fix is publishing to Production — which requires a home page, a privacy
+policy URL, and a verifiable authorised domain. A local single-user tool has
+none of those, so OAuth means re-authorising weekly, forever.
+
+Browser credentials last roughly two years while the session stays valid, and
+need no Google Cloud project at all.
+
+| | OAuth | Browser auth |
+|---|---|---|
+| Google Cloud project | Required | None |
+| Lifetime | 7 days unless published | ~2 years |
+| Publishing prerequisites | Domain + privacy policy | — |
+| Playlist editing | Yes | Yes |
+
+The trade is a fiddlier one-time setup — copying headers out of devtools — and
+credentials that die if the user signs out of YouTube Music.
+
+**This does not weaken D12.** CORS was always the primary reason a local
+process is required, and that is unchanged. It sharpens the credential
+argument rather than removing it: session cookies are *more* sensitive than a
+client secret would have been, and they now never reach the browser at all.
 
 ### When the proxy is not running
 
@@ -499,9 +524,10 @@ question dissolved with the Data API.
   change it — a visible change to the user's own view settings, which wants
   consent — or refuse and explain. Cheap to answer in 2a against a real
   playlist; expensive to guess at now.
-- **Does playlist *editing* work under OAuth?** Uploads are the only carve-out
-  the docs name, so it should. "Should" is not "does", and it is the first
-  thing 2a proves.
+- **Does playlist *editing* work under browser auth?** It should — browser
+  auth is the fuller of the two methods, and the docs' only carve-out runs the
+  other way (uploads work under browser auth but not OAuth). "Should" is not
+  "does", and it is the first thing 2a proves.
 
 ### Carried forward from the write-seam branch (2026-09-20)
 
