@@ -15,7 +15,7 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **291 tests across 18 files,
+All logic layers and all five screens are built. **300 tests across 19 files,
 all passing.** Build clean, design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
@@ -26,10 +26,23 @@ a Spotify-specific name would not have survived it.
 the direction contract's FINISH line is discharged.** Eight review rounds ran;
 the last closed with no open findings.
 
-**Live status:** reads work. A 414-track playlist has been fetched, sorted,
-previewed and diffed against the real API. Writes are unproven — clone-and-sort
-returned 403 on playlist creation, and the in-place reorder path has not been
-run at all. Both are the next thing to settle.
+**Live status:** reads and writes both work. A 414-track playlist has been
+fetched, sorted, previewed and diffed against the real API.
+
+On 2026-09-22 the write path was proven end to end against a live account:
+
+| Exercised | Result |
+|---|---|
+| In-place reorder, single move | `PUT /playlists/{id}/items` → 200 |
+| In-place reorder, many moves (reverse) | Every write 200, each quoting the previous `snapshot_id` |
+| `added_at` after reordering | **Preserved** — the playlist still sorts correctly by date added |
+| Clone-and-sort | `POST /me/playlists` → **201**, then `POST /playlists/{id}/items` → 201 |
+
+The 403 that previously blocked playlist creation is gone: `/me/playlists`
+answers, so the legacy `/users/{id}/playlists` fallback was never reached.
+
+Still not run live: a reorder at full scale (the largest real run is a small
+playlist), undo, and mid-run cancel.
 
 ---
 
@@ -39,10 +52,10 @@ run at all. Both are the next thing to settle.
 |---|---|---|
 | `src/model/` | `normalize.js`, `track.js` | 28 |
 | `src/sort/` | Nine strategies behind one registry | 59 |
-| `src/plan/` | `diff.js`, `undo.js`, `execute.js`, `clone.js` | 62 |
+| `src/plan/` | `diff.js`, `undo.js`, `execute.js`, `clone.js` | 57 |
 | `src/csv/` | `parse.js`, `detectColumns.js`, `match.js`, `order.js` | 83 |
-| `src/api/` | `client.js`, `playlists.js`, `mutations.js` | 41 |
-| `src/auth/` | `pkce.js`, `spotifyAuth.js`, `useAuth.js` | 18 |
+| `src/services/spotify/` | `client.js`, `playlists.js`, `mutations.js`, `spotifyAuth.js`, `writer.js` | 69 |
+| `src/auth/` | `pkce.js`, `useAuth.js` | 7 |
 | `src/ui/` | Five screens, board components, app state | — |
 
 ### Load-bearing details worth not rediscovering
@@ -144,7 +157,7 @@ DESIGN.md records these as build gaps rather than system rules.
 
 | # | Work | Notes |
 |---|---|---|
-| 1 | **Proving the write path** | `PUT .../items` (reorder) has never run live. `POST` to create a playlist returned 403, and now tries `/me/playlists` before the legacy user path — untested |
+| 1 | **A live write at full scale** | The write path is proven (see Live status), but the largest real reorder so far is a small playlist. A 414-track run would exercise rate limiting and a long snapshot chain, neither of which has been seen live. Undo and mid-run cancel are also unexercised |
 | 2 | Resuming an interrupted run | The undo snapshot is written and restorable, but "a tab died mid-run" detection on next load is not wired |
 | 3 | Dry-run detail | Reports a count; does not list the operations |
 | 4 | YouTube Music, cross-service sync | See [ROADMAP.md](ROADMAP.md) |
@@ -223,8 +236,9 @@ Forbidden` for this app.
 Both symptoms had one cause: every playlist read as 0 tracks because the
 count was read from a field that no longer exists, and opening one failed
 because the endpoint had moved. Reads and writes now target `/items`, kept in
-`src/api/endpoints.js` so a path Spotify has moved once can be moved again in
-one place. The count reads `items.total` and falls back to `tracks.total`.
+`src/services/spotify/endpoints.js` so a path Spotify has moved once can be
+moved again in one place. The count reads `items.total` and falls back to
+`tracks.total`.
 
 ### One bug the test suite could not have caught
 

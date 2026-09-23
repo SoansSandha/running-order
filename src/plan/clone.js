@@ -11,10 +11,8 @@
  * created.
  */
 
-import { addTracksInChunks, createPlaylist } from '../api/mutations.js'
-
 export async function executeClone({
-  client,
+  writer,
   userId,
   sourcePlaylist,
   targetTracks,
@@ -27,7 +25,7 @@ export async function executeClone({
   const skipped = { localFiles: 0, unavailable: 0, names: [] }
 
   for (const track of targetTracks) {
-    if (track.isUnavailable || !track.uri) {
+    if (track.isUnavailable || !writer.canWrite(track)) {
       skipped.unavailable += 1
       skipped.names.push(track.name || 'Unavailable track')
     } else if (track.isLocal) {
@@ -48,18 +46,13 @@ export async function executeClone({
     }
   }
 
-  const playlist = await createPlaylist(client, userId, {
+  const playlist = await writer.createPlaylist(userId, {
     name: `${sourcePlaylist.name} (sorted by ${strategyLabel})`,
     description: `Sorted copy of "${sourcePlaylist.name}" by ${strategyLabel}, ${formatToday()}.`,
     isPublic,
   })
 
-  await addTracksInChunks(
-    client,
-    playlist.id,
-    cloneable.map((track) => track.uri),
-    { onProgress },
-  )
+  await writer.addTracks(playlist.id, cloneable, { onProgress })
 
   return {
     playlist,

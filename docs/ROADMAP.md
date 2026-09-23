@@ -5,9 +5,19 @@ so nothing here is mistaken for something that exists.
 
 Current state is in [STATUS.md](STATUS.md).
 
+> **Phases 2 and 3 below are superseded** by
+> [2026-09-18-youtube-mirror-design.md](2026-09-18-youtube-mirror-design.md).
+>
+> They are kept because the questions they raise are the ones the spike went
+> on to answer, and the answers are only legible beside the questions. In
+> short: YouTube Music does not expose the metadata that half the sort
+> strategies need, so it does not become a second *sortable* source. Spotify
+> stays canonical and a YouTube playlist is made to match it — the two phases
+> below collapse into one. The reasoning is in the spec.
+
 ---
 
-## Phase 2 — YouTube Music as a second source
+## Phase 2 — YouTube Music as a second source *(superseded)*
 
 Sort a YouTube Music playlist with the same strategies that already work on
 Spotify.
@@ -46,7 +56,7 @@ None of this is knowable from here. It is API research, and it comes first.
 
 ---
 
-## Phase 3 — Reconciling one playlist across both services
+## Phase 3 — Reconciling one playlist across both services *(superseded)*
 
 Connect both services, pick the same playlist on each, and see what each one
 is missing. Then sync in either direction.

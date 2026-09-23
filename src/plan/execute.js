@@ -6,7 +6,6 @@
  * parallelised however slow that makes a large sort.
  */
 
-import { reorderTrack } from '../api/mutations.js'
 import { applyMoveOps, buildMoveOps } from './diff.js'
 
 /**
@@ -26,7 +25,7 @@ export class ReorderFailure extends Error {
 
 /**
  * @param {object} args
- * @param {object} args.client        api client
+ * @param {object} args.writer        service writer (see the Spotify writer module)
  * @param {string} args.playlistId
  * @param {Array}  args.currentTracks normalized Tracks, current order
  * @param {Array}  args.targetTracks  the same Tracks, desired order
@@ -36,7 +35,7 @@ export class ReorderFailure extends Error {
  * @param {boolean} [args.dryRun]     compute the plan, send nothing
  */
 export async function executeReorder({
-  client,
+  writer,
   playlistId,
   currentTracks,
   targetTracks,
@@ -77,7 +76,7 @@ export async function executeReorder({
     }
 
     try {
-      const next = await reorderTrack(client, playlistId, op, liveSnapshot)
+      const next = await writer.reorder(playlistId, op, liveSnapshot)
       if (next) liveSnapshot = next
     } catch (cause) {
       throw new ReorderFailure(

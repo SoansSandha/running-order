@@ -146,3 +146,42 @@ describe('buildMoveOps — property: ops always reproduce the target', () => {
     expect(target).toEqual(['c', 'b', 'a'])
   })
 })
+
+describe('neutral move ops', () => {
+  test('names the key being moved and the key it lands in front of', () => {
+    const ops = buildMoveOps(['A', 'B', 'C'], ['C', 'A', 'B'])
+    expect(ops).toHaveLength(1)
+    expect(ops[0].key).toBe('C')
+    expect(ops[0].beforeKey).toBe('A')
+  })
+
+  test('beforeKey is null when a track moves to the end', () => {
+    const ops = buildMoveOps(['A', 'B', 'C'], ['B', 'C', 'A'])
+    expect(ops).toHaveLength(1)
+    expect(ops[0].key).toBe('A')
+    expect(ops[0].beforeKey).toBeNull()
+  })
+
+  // The index ops are already verified by randomised replay. This asserts the
+  // neutral fields describe the SAME move, over the same random permutations,
+  // by replaying them independently with splice-before-key semantics.
+  test('replaying neutral ops reproduces the target, over 300 permutations', () => {
+    const applyNeutral = (items, ops) => {
+      const model = [...items]
+      for (const { key, beforeKey } of ops) {
+        model.splice(model.indexOf(key), 1)
+        const at = beforeKey === null ? model.length : model.indexOf(beforeKey)
+        model.splice(at, 0, key)
+      }
+      return model
+    }
+
+    const rng = mulberry32(7)
+    for (let round = 0; round < 300; round++) {
+      const size = 2 + Math.floor(rng() * 30)
+      const current = range(size).map((i) => `k${i}`)
+      const target = shuffled(current, rng)
+      expect(applyNeutral(current, buildMoveOps(current, target))).toEqual(target)
+    }
+  })
+})

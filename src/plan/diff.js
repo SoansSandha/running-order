@@ -30,7 +30,14 @@ export function applyMoveOps(items, ops) {
 /**
  * @param {Array} current unique keys in their present playlist order
  * @param {Array} target  the same keys in the desired order
- * @returns {Array<{rangeStart: number, insertBefore: number, rangeLength: number}>}
+ * @returns {Array<{rangeStart: number, insertBefore: number, rangeLength: number, key: *, beforeKey: *}>}
+ *   `rangeStart`/`insertBefore`/`rangeLength` are Spotify's form, with
+ *   `insertBefore` in PRE-removal indexing. `key`/`beforeKey` are the same
+ *   move stated without indices, for services that move by item identity.
+ *   `beforeKey === null` means "to the end".
+ *   Keys must be unique and non-null: `null` is reserved as the `beforeKey`
+ *   end-of-list sentinel, so a caller keying by something other than
+ *   `originalIndex` (e.g. a service item id) must not pass `null` as a key.
  */
 export function buildMoveOps(current, target) {
   const size = current.length
@@ -85,14 +92,19 @@ export function buildMoveOps(current, target) {
 
     if (to === from) continue
 
+    const [moved] = model.splice(from, 1)
+    model.splice(to, 0, moved)
+
     ops.push({
       rangeStart: from,
       insertBefore: to > from ? to + 1 : to,
       rangeLength: 1,
+      // The same move, stated without indices: YouTube's edit_playlist takes
+      // "move this item before that item" natively, and index arithmetic is
+      // the thing most likely to be subtly wrong across two services.
+      key,
+      beforeKey: to + 1 < model.length ? model[to + 1] : null,
     })
-
-    const [moved] = model.splice(from, 1)
-    model.splice(to, 0, moved)
   }
 
   return ops
