@@ -246,8 +246,27 @@ need no Google Cloud project at all.
 | Publishing prerequisites | Domain + privacy policy | — |
 | Playlist editing | Yes | Yes |
 
-The trade is a fiddlier one-time setup — copying headers out of devtools — and
-credentials that die if the user signs out of YouTube Music.
+The trade is threefold: a fiddlier one-time setup (copying headers out of
+devtools), credentials that die if the user signs out of YouTube Music, and
+**ytmusicapi labels browser auth "deprecated"** in its CLI help.
+
+That last one was checked rather than assumed. As of 1.12.3 it is a soft
+deprecation: `ytmusicapi/auth/browser.py` is fully present and wired, and no
+`DeprecationWarning` is raised — unlike `subscribe_artists`, which does raise
+one. It is a nudge toward OAuth, not a scheduled removal.
+
+Two mitigations, because "soft today" is not "safe forever":
+
+- **Pin `ytmusicapi` to an exact version** in the proxy's `requirements.txt`,
+  so an incidental upgrade cannot remove the auth method underneath a working
+  install.
+- **D13 contains the blast radius.** The proxy holds auth and transport and
+  nothing else, so if browser auth is eventually removed, the change is
+  confined to the proxy's auth call. No JavaScript moves, and no test changes.
+
+If Google's publishing requirements ever become satisfiable for this project —
+a domain with a privacy policy — OAuth becomes the better long-term choice and
+this decision should be revisited.
 
 **This does not weaken D12.** CORS was always the primary reason a local
 process is required, and that is unchanged. It sharpens the credential
