@@ -50,3 +50,37 @@ def auth_status() -> dict:
         return {"authenticated": True}
     except Exception:
         return {"authenticated": False}
+
+
+@app.get("/playlists")
+def list_playlists() -> dict:
+    """The user's library playlists, renamed to the app's field names."""
+    raw = get_client().get_library_playlists(limit=None)
+    return {
+        "playlists": [
+            {"id": p.get("playlistId"), "title": p.get("title"), "count": p.get("count")}
+            for p in raw
+        ]
+    }
+
+
+@app.get("/playlists/{playlist_id}")
+def get_playlist(playlist_id: str) -> dict:
+    """One playlist's tracks, passed through exactly as ytmusicapi returns them.
+
+    `limit=None` is not optional: the default reads whole pages and returned
+    200 of 379 tracks against the real library.
+
+    `counted` and `readable` are reported separately because they differ —
+    measured 382 against 379. Items YouTube counts but will not return cannot
+    be ordered, so the app has to know they exist rather than infer a count.
+    """
+    raw = get_client().get_playlist(playlist_id, limit=None)
+    tracks = raw.get("tracks") or []
+    return {
+        "id": raw.get("id"),
+        "title": raw.get("title"),
+        "counted": raw.get("trackCount"),
+        "readable": len(tracks),
+        "tracks": tracks,
+    }
