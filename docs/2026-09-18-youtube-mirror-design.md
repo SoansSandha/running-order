@@ -613,6 +613,54 @@ shipped.
   now service-neutral seam. The neutral contract requires no particular batch
   size, so when a second writer lands this should become "onProgress is
   forwarded, and the final call is `(total, total)`".
+### Carried forward from the read-path branch (2026-09-24)
+
+Deliverable 2a's read path shipped. Its final review found no Critical defects
+but named work the next plan must own. Recorded here, not in a scratch ledger.
+
+**Must be decided before a UI reads the YouTube path:**
+
+- **`isUnavailable` means two different things across the seam.** On Spotify it
+  means the row came back `null` — no metadata at all, which is why `sort/`
+  sinks those rows to the bottom of every sort. On YouTube it means
+  region-blocked or removed, and the row still carries full title, artists,
+  album and duration. So five fully-described tracks in the measured library
+  would sort to the bottom of a *title* sort, and those become permanent
+  writes once 2c ships. The flag is genuinely useful; what is wrong is that
+  `sort/` treats "unavailable" as "unsortable". Deferred deliberately: fixing
+  it means changing proven Spotify sorting code with no consumer to test
+  against. **Decide it when the UI lands, not by inheritance.**
+- **A stale session and a genuinely unreorderable playlist are
+  indistinguishable** to a caller of `normalizeYouTubeTracks` — both give `[]`.
+  No code change is needed: `/playlists/{id}` already returns `readable`
+  alongside the track array, so `readable > 0 && accepted === 0` is the
+  unambiguous signal. The 2b UI must check it rather than rendering "empty
+  playlist".
+
+**Known degradations, to surface with D20's capability gating:**
+
+- **The album sort puts album-less rows in one nameless block at the *top*.**
+  They key on `sortKey('')`, which sorts before every real album name — 151 of
+  379 tracks in the measured library, inverting this codebase's own convention
+  that data-less rows sink.
+- **The artist sort's default inner order is date-added**, which YouTube does
+  not have, so the most-used sort silently falls through to something other
+  than its label.
+
+**Named debt:**
+
+- **`GET /playlists` has never run against a live authenticated account.** The
+  session went stale mid-build, so it is covered only by fake-backed tests.
+  Four lines of field renaming; re-verify the moment credentials are
+  refreshed.
+- **The proxy hand-picks the playlist envelope and drops `sortOrder`**, which
+  §5 requires be checked before ordering. 2c will need a proxy change it
+  should not need.
+- **The cached `YTMusic` holds one `requests.Session` shared across FastAPI's
+  threadpool.** Low risk for a single-user local tool, but the original
+  "not reachable with one endpoint" rationale expired when the playlist routes
+  landed.
+
 - **`csv/detectColumns.js` and `csv/match.js` still hardcode Spotify URI
   patterns** (§4 named this). The mirror path does not need them, so it stays
   out of scope — but CSV-driven ordering of a YouTube playlist would.
