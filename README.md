@@ -82,10 +82,16 @@ server, and no shared credentials.
 git clone <this repo>
 cd running-order
 npm install
-npm run dev
+npm start
 ```
 
 Then open **`http://127.0.0.1:5173/`**.
+
+`npm start` also launches the local YouTube Music proxy on port 8787. That
+part needs a one-time Python setup (see [`proxy/README.md`](proxy/README.md));
+until you do it the proxy will print an error and stop, and **the app carries
+on working for Spotify** — it does not depend on the proxy. Use
+`npm run dev:web` if you would rather not see the error at all.
 
 ### Setting up the Spotify app
 
@@ -134,7 +140,9 @@ tree-shaken out of production builds entirely.
 
 | Command | |
 |---|---|
-| `npm run dev` | Dev server on `127.0.0.1:5173` |
+| `npm start` | **App and YouTube proxy together** — `127.0.0.1:5173` and `:8787` |
+| `npm run dev:web` | The app alone |
+| `npm run dev:proxy` | The YouTube proxy alone |
 | `npm test` | The suite, once |
 | `npm run test:watch` | Watch mode |
 | `npm run lint` | Oxlint over `src` |

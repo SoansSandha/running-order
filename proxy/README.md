@@ -22,9 +22,21 @@ it carries session cookies — treat it like a password.
 
 ## Running
 
+From the repository root, `npm start` runs this alongside the app. To run it
+alone:
+
 ```bash
-uvicorn app:app --host 127.0.0.1 --port 8787
+npm run dev:proxy
 ```
+
+or directly, from this directory:
+
+```bash
+python -m uvicorn app:app --host 127.0.0.1 --port 8787
+```
+
+If it fails to start, the app keeps working — Spotify sorting does not depend
+on this process. Only the YouTube features go quiet.
 
 `GET /auth/status` answers `{"authenticated": true}` once credentials load.
 
