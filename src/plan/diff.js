@@ -48,6 +48,9 @@ export function buildMoveOps(current, target) {
 
   const positions = new Map()
   for (let i = 0; i < size; i++) {
+    if (current[i] === null) {
+      throw new Error('track keys must not be null; null is reserved as the beforeKey end-of-list sentinel')
+    }
     if (positions.has(current[i])) {
       throw new Error('track keys must be unique; use originalIndex, not URI')
     }

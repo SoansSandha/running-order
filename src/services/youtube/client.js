@@ -11,7 +11,11 @@ const DEFAULT_BASE_URL = 'http://127.0.0.1:8787'
 /** The proxy process is not running or not reachable. */
 export class ProxyUnavailableError extends Error {
   constructor(cause) {
-    super('The YouTube proxy is not running. Start it with `npm run dev`.', { cause })
+    super(
+      'The YouTube proxy is not running. Start it with ' +
+        '`uvicorn app:app --host 127.0.0.1 --port 8787` from the proxy/ directory.',
+      { cause },
+    )
     this.name = 'ProxyUnavailableError'
   }
 }

@@ -44,7 +44,7 @@ export function formatCount(value) {
 
 export function artistsOf(track) {
   if (track.isEpisode) return track.showName ?? 'Podcast'
-  if (track.isUnavailable) return 'No longer on Spotify'
+  if (track.isUnavailable) return 'No longer available'
   return track.artists.map((artist) => artist.name).join(', ') || '—'
 }
 

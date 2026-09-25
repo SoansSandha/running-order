@@ -53,7 +53,9 @@ describe('normalizeYouTubeTracks', () => {
   test('survives a missing videoType and a missing feedbackTokens', () => {
     // Measured: feedbackTokens is present on album tracks and absent on
     // videos and uploads, so the field set genuinely varies row to row.
-    expect(() => normalizeYouTubeTracks([UNTYPED, MUSIC_VIDEO])).not.toThrow()
+    const tracks = normalizeYouTubeTracks([UNTYPED, MUSIC_VIDEO])
+    expect(tracks).toHaveLength(2)
+    expect(tracks.map((t) => t.itemId)).toEqual(['SV0005', 'SV0002'])
   })
 
   test('numbers tracks by fetch position', () => {
@@ -82,6 +84,8 @@ describe('normalizeYouTubeTracks', () => {
 
   test('is a permutation of the rows it accepts', () => {
     const raw = [ALBUM_TRACK, MUSIC_VIDEO, USER_UPLOAD, UNAVAILABLE, UNTYPED]
-    expect(normalizeYouTubeTracks(raw)).toHaveLength(raw.length)
+    const tracks = normalizeYouTubeTracks(raw)
+    expect(tracks).toHaveLength(raw.length)
+    expect(tracks.map((t) => t.itemId)).toEqual(raw.map((r) => r.setVideoId))
   })
 })
