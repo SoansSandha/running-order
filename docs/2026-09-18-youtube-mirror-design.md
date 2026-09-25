@@ -624,9 +624,14 @@ but named work the next plan must own. Recorded here, not in a scratch ledger.
   means the row came back `null` — no metadata at all, which is why `sort/`
   sinks those rows to the bottom of every sort. On YouTube it means
   region-blocked or removed, and the row still carries full title, artists,
-  album and duration. So five fully-described tracks in the measured library
-  would sort to the bottom of a *title* sort, and those become permanent
-  writes once 2c ships. The flag is genuinely useful; what is wrong is that
+  album and duration.
+
+  **Confirmed against the live library 2026-09-24, no longer a prediction.**
+  A *date-added* sort — a field YouTube does not have, so it should move
+  nothing — produced exactly **5 move operations, every one of them an
+  unavailable track being sunk to the bottom**. The same 5 sink on every
+  strategy whose fields YouTube lacks. Each carries a real title, artist and
+  duration. Once 2c ships, that is 5 permanent misplacements per sort. The flag is genuinely useful; what is wrong is that
   `sort/` treats "unavailable" as "unsortable". Deferred deliberately: fixing
   it means changing proven Spotify sorting code with no consumer to test
   against. **Decide it when the UI lands, not by inheritance.**
@@ -649,10 +654,12 @@ but named work the next plan must own. Recorded here, not in a scratch ledger.
 
 **Named debt:**
 
-- **`GET /playlists` has never run against a live authenticated account.** The
-  session went stale mid-build, so it is covered only by fake-backed tests.
-  Four lines of field renaming; re-verify the moment credentials are
-  refreshed.
+- ~~`GET /playlists` has never run against a live authenticated account.~~
+  **Cleared 2026-09-24.** Credentials refreshed and the whole read path
+  verified live over HTTP: 3 playlists listed with correct field renaming and
+  a null `count` handled; the 386-track playlist fetched, `readable` 383,
+  normalized 383, zero dropped, `setVideoId` present and unique on every row,
+  `originalIndex` dense. All nine sort strategies produced valid permutations.
 - **The proxy hand-picks the playlist envelope and drops `sortOrder`**, which
   §5 requires be checked before ordering. 2c will need a proxy change it
   should not need.
