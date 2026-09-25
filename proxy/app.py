@@ -12,7 +12,7 @@ where the test suite lives. See docs/2026-09-18-youtube-mirror-design.md D13.
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from ytmusicapi import YTMusic
 
@@ -42,9 +42,21 @@ def get_client() -> YTMusic:
     return _client
 
 
+def reset_client() -> None:
+    """Drop the cached client so refreshed credentials are picked up."""
+    global _client
+    _client = None
+
+
 @app.get("/auth/status")
 def auth_status() -> dict:
-    """Whether stored credentials load. Never returns the credentials."""
+    """Whether stored credentials load. Never returns the credentials.
+
+    This proves only that the credential file parses — for browser auth,
+    construction makes no network call, so a session YouTube killed
+    server-side loads exactly as well as a live one. See the POST route for
+    the check that actually detects a dead session.
+    """
     try:
         get_client()
         return {"authenticated": True}
@@ -52,10 +64,29 @@ def auth_status() -> dict:
         return {"authenticated": False}
 
 
+@app.post("/auth/status")
+def auth_status_live() -> dict:
+    """Whether the stored session still authenticates server-side (spec §5).
+
+    GET only proves a credential file parses. Browser auth makes no network
+    call at construction, so a session YouTube killed loads exactly as well
+    as a live one. This makes one authenticated call to find out.
+    """
+    try:
+        get_client().get_playlist("LM", limit=1)
+        return {"authenticated": True}
+    except Exception:
+        reset_client()
+        return {"authenticated": False}
+
+
 @app.get("/playlists")
 def list_playlists() -> dict:
     """The user's library playlists, renamed to the app's field names."""
-    raw = get_client().get_library_playlists(limit=None)
+    try:
+        raw = get_client().get_library_playlists(limit=None)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
     return {
         "playlists": [
             {"id": p.get("playlistId"), "title": p.get("title"), "count": p.get("count")}
@@ -75,7 +106,13 @@ def get_playlist(playlist_id: str) -> dict:
     measured 382 against 379. Items YouTube counts but will not return cannot
     be ordered, so the app has to know they exist rather than infer a count.
     """
-    raw = get_client().get_playlist(playlist_id, limit=None)
+    try:
+        raw = get_client().get_playlist(playlist_id, limit=None)
+    except Exception:
+        # Never interpolate the exception's own string: for a malformed
+        # credentials file, a json.JSONDecodeError's `.doc` carries the whole
+        # document, which is proxy/browser.json — session cookies.
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
     tracks = raw.get("tracks") or []
     return {
         "id": raw.get("id"),

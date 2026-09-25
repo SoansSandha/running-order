@@ -82,3 +82,50 @@ def test_playlist_passes_tracks_through_unchanged(client, monkeypatch):
     monkeypatch.setattr(proxy, "get_client", lambda: fake)
     # D13: the proxy reshapes nothing. Normalization happens in JS.
     assert client.get("/playlists/PL1").json()["tracks"] == [raw]
+
+
+class RaisingYT:
+    """A client whose calls always fail, as a dead session or a bad id would."""
+
+    def __init__(self, message="session dead — leaky detail, must never reach a response"):
+        self._message = message
+
+    def get_playlist(self, playlistId, limit=None):
+        raise RuntimeError(self._message)
+
+    def get_library_playlists(self, limit=None):
+        raise RuntimeError(self._message)
+
+
+def test_post_auth_status_true_when_the_probe_succeeds(client, monkeypatch):
+    fake = FakeYT(playlist={"id": "LM", "tracks": []})
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert client.post("/auth/status").json() == {"authenticated": True}
+    assert fake.get_playlist_calls == [{"playlistId": "LM", "limit": 1}]
+
+
+def test_post_auth_status_false_when_the_probe_raises(client, monkeypatch):
+    monkeypatch.setattr(proxy, "get_client", lambda: RaisingYT())
+    assert client.post("/auth/status").json() == {"authenticated": False}
+
+
+def test_post_auth_status_failure_resets_the_cached_client(client, monkeypatch):
+    # Set the cache directly, rather than mocking get_client, so this proves
+    # reset_client() actually clears proxy._client and not just a mock's return.
+    monkeypatch.setattr(proxy, "_client", RaisingYT())
+    client.post("/auth/status")
+    assert proxy._client is None
+
+
+def test_playlists_route_failure_becomes_a_clean_http_error(client, monkeypatch):
+    monkeypatch.setattr(proxy, "get_client", lambda: RaisingYT("top secret cookie"))
+    response = client.get("/playlists")
+    assert response.status_code == 502
+    assert "top secret cookie" not in response.text
+
+
+def test_playlist_route_failure_becomes_a_clean_http_error(client, monkeypatch):
+    monkeypatch.setattr(proxy, "get_client", lambda: RaisingYT("top secret cookie"))
+    response = client.get("/playlists/PL1")
+    assert response.status_code == 502
+    assert "top secret cookie" not in response.text
