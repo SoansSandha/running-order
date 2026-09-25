@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-16 · **HEAD:** `see git log`
+**Last updated:** 2026-09-24 · **HEAD:** `see git log`
 
 Design and decisions: [2026-09-09-design.md](2026-09-09-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -15,8 +15,9 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **300 tests across 19 files,
-all passing.** Build clean, design detector clean, working tree clean.
+All logic layers and all five screens are built. **323 JavaScript tests across
+21 files, all passing** (plus 12 Python tests for the proxy). Build clean,
+design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
 when YouTube Music support and cross-service reconciliation entered scope —
@@ -57,9 +58,10 @@ playlist), undo, and mid-run cancel.
 | `src/services/spotify/` | `client.js`, `playlists.js`, `mutations.js`, `spotifyAuth.js`, `writer.js` | 69 |
 | `src/auth/` | `pkce.js`, `useAuth.js` | 7 |
 | `src/ui/` | Five screens, board components, app state | — |
-| `proxy/` | `app.py` — local FastAPI proxy for YouTube Music | 3 (pytest) |
+| `src/services/youtube/` | `client.js`, `track.js` | 18 |
+| `proxy/` | `app.py` — local FastAPI proxy for YouTube Music | 12 (pytest) |
 
-**304 JavaScript tests, 3 Python tests.**
+**323 JavaScript tests, 12 Python tests.**
 
 ### Load-bearing details worth not rediscovering
 
@@ -161,16 +163,16 @@ DESIGN.md records these as build gaps rather than system rules.
 Branch `youtube-mirror-2a`. Design: [2026-09-18-youtube-mirror-design.md](2026-09-18-youtube-mirror-design.md).
 Plan: [2026-09-22-youtube-read-path.md](superpowers/plans/2026-09-22-youtube-read-path.md).
 
-Paused after Task 3 of 6. Everything below is committed, reviewed and green.
+All six tasks are done. Everything below is committed, reviewed and green.
 
 | Task | State |
 |---|---|
 | 1 — `keyOf` on `executeReorder` | **Done.** The planner can key a move plan on a service's own per-item id |
 | 2 — `source` / `itemId` on Track | **Done.** 23-key Track shape, ready for a second normalizer |
 | 3 — Proxy scaffold + auth status | **Done.** FastAPI on `127.0.0.1:8787`, CORS-locked, credentials proven to load |
-| 4 — Proxy playlist endpoints | Not started. Brief written |
-| 5 — JS client for the proxy | Not started |
-| 6 — YouTube → Track normalizer | Not started |
+| 4 — Proxy playlist endpoints | **Done.** `GET /playlists` and `GET /playlists/{id}`; both now return a clean `HTTPException(502)` on failure instead of an unhandled traceback, and `POST /auth/status` makes one authenticated call to detect a session YouTube killed server-side |
+| 5 — JS client for the proxy | **Done.** `src/services/youtube/client.js` — a plain fetch wrapper; `ProxyUnavailableError` points at the `uvicorn` command that actually starts the proxy |
+| 6 — YouTube → Track normalizer | **Done.** `src/services/youtube/track.js` — maps onto the shared Track shape, numbers accepted rows densely, and drops rows with no `setVideoId` |
 
 ### What the live spike established
 
@@ -210,9 +212,11 @@ password; it is not in the repository and must never be.
   write.
 - **`get_client()` caches at process scope with no lock.** Harmless with one
   read-only endpoint; a latent race if concurrent handling is added.
-- **Neither `buildMoveOps` nor `executeReorder` enforces non-null keys**, only
-  uniqueness, while `null` is the `beforeKey` end-of-list sentinel. Closed at
-  the boundary instead: Task 6's adapter drops rows with a null `setVideoId`.
+- **`buildMoveOps` now enforces non-null keys** alongside uniqueness, since
+  `null` is the `beforeKey` end-of-list sentinel; `executeReorder` inherits
+  this by calling `buildMoveOps`. Task 6's adapter also drops rows with a
+  null `setVideoId` at the boundary, so the check is defence in depth rather
+  than the only guard.
 
 ---
 
