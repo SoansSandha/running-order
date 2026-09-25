@@ -61,6 +61,18 @@ describe('normalizeYouTubeTracks', () => {
     expect(tracks.map((t) => t.originalIndex)).toEqual([0, 1, 2])
   })
 
+  test('numbers accepted tracks densely when rows are dropped', () => {
+    // A loop-indexed implementation would yield [1, 3] here instead of [0, 1].
+    const tracks = normalizeYouTubeTracks([
+      { ...MUSIC_VIDEO, setVideoId: null },
+      ALBUM_TRACK,
+      { ...USER_UPLOAD, setVideoId: null },
+      MUSIC_VIDEO,
+    ])
+    expect(tracks.map((t) => t.originalIndex)).toEqual([0, 1])
+    expect(tracks.map((t) => t.itemId)).toEqual(['SV0001', 'SV0002'])
+  })
+
   test('drops a row with no setVideoId, because it cannot be reordered', () => {
     // null is the beforeKey end-of-list sentinel, so it must never be a key.
     const tracks = normalizeYouTubeTracks([ALBUM_TRACK, { ...MUSIC_VIDEO, setVideoId: null }])
