@@ -22,6 +22,10 @@ import { applyMoveOps, buildMoveOps } from '../plan/diff.js'
 import { executeReorder } from '../plan/execute.js'
 import { buildRestoreOrder, createSnapshot, loadSnapshot, saveSnapshot } from '../plan/undo.js'
 import { createSpotifyWriter } from '../services/spotify/writer.js'
+import { defaultStrategyOptionsFor } from '../services/capabilities.js'
+import { createYouTubeClient } from '../services/youtube/client.js'
+import { toAppPlaylists } from '../services/youtube/playlists.js'
+import { normalizeYouTubeTracks } from '../services/youtube/track.js'
 import { defaultOptionsFor, sortTracks, strategyById } from '../sort/index.js'
 
 export const CSV_STRATEGY = 'csv'
@@ -49,6 +53,9 @@ export function useSorterApp(auth, demo = null) {
   const [run, setRun] = useState(demo?.run ?? null)
   const [outcome, setOutcome] = useState(demo?.outcome ?? null)
   const abort = useRef(null)
+
+  const [source, setSource] = useState(demo?.source ?? 'spotify')
+  const youtube = useMemo(() => createYouTubeClient({}), [])
 
   /* ---- Derived order ---------------------------------------------------- */
 
@@ -126,6 +133,11 @@ export function useSorterApp(auth, demo = null) {
     setError(null)
     setBusy({ label: 'Reading your library', done: 0, total: 0 })
     try {
+      if (source === 'youtube') {
+        setBusy({ label: 'Reading your YouTube library', done: 0, total: 0 })
+        setPlaylists(toAppPlaylists(await youtube.listPlaylists()))
+        return
+      }
       const profile = await getCurrentUser(client)
       setMe(profile)
       const found = await listEditablePlaylists(client, profile.id, {
@@ -137,7 +149,7 @@ export function useSorterApp(auth, demo = null) {
     } finally {
       setBusy(null)
     }
-  }, [client])
+  }, [client, source, youtube])
 
   const openPlaylist = useCallback(
     async (chosen) => {
@@ -155,6 +167,11 @@ export function useSorterApp(auth, demo = null) {
 
       setBusy({ label: `Reading ${chosen.name}`, done: 0, total: chosen.trackCount })
       try {
+        if (chosen.source === 'youtube') {
+          const fetched = await youtube.fetchPlaylist(chosen.id)
+          setTracks(normalizeYouTubeTracks(fetched.tracks))
+          return
+        }
         const loaded = await fetchPlaylistTracks(client, chosen.id, {
           onProgress: (done, total) =>
             setBusy({ label: `Reading ${chosen.name}`, done, total }),
@@ -166,13 +183,16 @@ export function useSorterApp(auth, demo = null) {
         setBusy(null)
       }
     },
-    [client],
+    [client, youtube],
   )
 
-  const chooseStrategy = useCallback((id) => {
-    setStrategyId(id)
-    setOptions(id === CSV_STRATEGY ? {} : defaultOptionsFor(id))
-  }, [])
+  const chooseStrategy = useCallback(
+    (id) => {
+      setStrategyId(id)
+      setOptions(id === CSV_STRATEGY ? {} : defaultStrategyOptionsFor(source, id, defaultOptionsFor(id)))
+    },
+    [source],
+  )
 
   const setOption = useCallback((key, value) => {
     setOptions((current) => ({ ...current, [key]: value }))
@@ -322,6 +342,15 @@ export function useSorterApp(auth, demo = null) {
 
   const cancelRun = useCallback(() => abort.current?.abort(), [])
 
+  const changeSource = useCallback((next) => {
+    setSource(next)
+    setPlaylists([])
+    setPlaylist(null)
+    setTracks([])
+    setError(null)
+    setScreen('playlists')
+  }, [])
+
   const undoLast = useCallback(async () => {
     if (!playlist) return
     const snapshot = loadSnapshot(playlist.id)
@@ -357,6 +386,8 @@ export function useSorterApp(auth, demo = null) {
   return {
     screen,
     setScreen,
+    source,
+    setSource: changeSource,
     me,
     playlists,
     busy,
