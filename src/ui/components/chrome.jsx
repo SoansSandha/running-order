@@ -144,8 +144,12 @@ export function CopyStrip({ value, label = 'Copy' }) {
   )
 }
 
-/** A segmented control, rendered as adjacent flap keys. */
-export function OptionRow({ value, onChange, choices, label }) {
+/**
+ * A segmented control, rendered as adjacent flap keys.
+ *
+ * `disabled` holds the whole row — for a control that is merely busy.
+ */
+export function OptionRow({ value, onChange, choices, label, disabled = false }) {
   return (
     <div>
       {label ? <span className="field-label">{label}</span> : null}
@@ -156,6 +160,7 @@ export function OptionRow({ value, onChange, choices, label }) {
             type="button"
             className="option"
             aria-pressed={value === choice.value}
+            disabled={disabled}
             onClick={() => onChange(choice.value)}
           >
             {choice.label}

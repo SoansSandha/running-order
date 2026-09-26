@@ -33,7 +33,7 @@ const CSV_FIELDS = [
 
 export function SortScreen({ app }) {
   const {
-    source,
+    capabilitySource,
     playlist,
     tracks,
     busy,
@@ -94,7 +94,9 @@ export function SortScreen({ app }) {
             Order by
           </p>
           {STRATEGIES.map((item) => {
-            const reason = unsupportedReason(source, item.id)
+            // The open playlist's own service decides, not the toggle that
+            // happens to be showing. They can disagree.
+            const reason = unsupportedReason(capabilitySource, item.id)
             return (
               <button
                 key={item.id}

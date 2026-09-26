@@ -50,6 +50,22 @@ export function unsupportedReason(source, strategyId) {
 }
 
 /**
+ * A strategy this source can honour, keeping the chosen one where possible.
+ *
+ * Switching source must not leave a disabled strategy selected: the row
+ * renders both pressed and disabled, the preview is still ordered by it, and
+ * the user cannot even re-select it to clear the state. Falls back to the
+ * first strategy the source supports — read off the registry, so a strategy
+ * added later needs no second list updating.
+ *
+ * @returns {string} `strategyId` if it is honoured, otherwise a substitute
+ */
+export function supportedStrategyFor(source, strategyId) {
+  if (!unsupportedReason(source, strategyId)) return strategyId
+  return STRATEGIES.find((strategy) => !unsupportedReason(source, strategy.id))?.id ?? strategyId
+}
+
+/**
  * Replace any option value the source cannot honour.
  *
  * The artist sort defaults to ordering by date added, which YouTube lacks —

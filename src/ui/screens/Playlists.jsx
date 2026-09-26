@@ -88,6 +88,10 @@ export function PlaylistsScreen({ app, auth }) {
           label="Source"
           value={source}
           onChange={setSource}
+          // Switching mid-read lets an in-flight library land on top of the
+          // cleared board, leaving rows from one service under the name of
+          // the other. Reload is already held for the same reason.
+          disabled={Boolean(busy)}
           choices={[
             { value: 'spotify', label: 'Spotify' },
             { value: 'youtube', label: 'YouTube Music' },

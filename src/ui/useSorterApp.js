@@ -22,7 +22,7 @@ import { applyMoveOps, buildMoveOps } from '../plan/diff.js'
 import { executeReorder } from '../plan/execute.js'
 import { buildRestoreOrder, createSnapshot, loadSnapshot, saveSnapshot } from '../plan/undo.js'
 import { createSpotifyWriter } from '../services/spotify/writer.js'
-import { defaultStrategyOptionsFor } from '../services/capabilities.js'
+import { defaultStrategyOptionsFor, supportedStrategyFor } from '../services/capabilities.js'
 import { createYouTubeClient } from '../services/youtube/client.js'
 import { toAppPlaylists } from '../services/youtube/playlists.js'
 import { normalizeYouTubeTracks } from '../services/youtube/track.js'
@@ -56,6 +56,19 @@ export function useSorterApp(auth, demo = null) {
 
   const [source, setSource] = useState(demo?.source ?? 'spotify')
   const youtube = useMemo(() => createYouTubeClient({}), [])
+
+  /**
+   * The service any capability question is really about.
+   *
+   * An open playlist knows which service it came from; the toggle only says
+   * which library is being browsed. The two agree right up until they do not
+   * — the toggle is live, so an in-flight library read can land after the
+   * open playlist was cleared — and the row's own service is the one that
+   * decides what can be done to it. Asked once here so no screen can answer
+   * it differently. A Spotify playlist carries no `source`, so it falls
+   * through to the toggle and reads 'spotify' exactly as before.
+   */
+  const capabilitySource = playlist?.source ?? source
 
   /* ---- Derived order ---------------------------------------------------- */
 
@@ -189,9 +202,13 @@ export function useSorterApp(auth, demo = null) {
   const chooseStrategy = useCallback(
     (id) => {
       setStrategyId(id)
-      setOptions(id === CSV_STRATEGY ? {} : defaultStrategyOptionsFor(source, id, defaultOptionsFor(id)))
+      setOptions(
+        id === CSV_STRATEGY
+          ? {}
+          : defaultStrategyOptionsFor(capabilitySource, id, defaultOptionsFor(id)),
+      )
     },
-    [source],
+    [capabilitySource],
   )
 
   const setOption = useCallback((key, value) => {
@@ -342,15 +359,32 @@ export function useSorterApp(auth, demo = null) {
 
   const cancelRun = useCallback(() => abort.current?.abort(), [])
 
-  const changeSource = useCallback((next) => {
-    setSource(next)
-    setOptions(defaultStrategyOptionsFor(next, strategyId, options))
-    setPlaylists([])
-    setPlaylist(null)
-    setTracks([])
-    setError(null)
-    setScreen('playlists')
-  }, [strategyId, options])
+  const changeSource = useCallback(
+    (next) => {
+      // A strategy the new source cannot honour must not stay selected: it
+      // would render pressed and disabled at once, keep driving the preview,
+      // and be impossible to clear, because the only control that could
+      // clear it is the disabled row itself.
+      const nextStrategy = supportedStrategyFor(next, strategyId)
+      setSource(next)
+      setStrategyId(nextStrategy)
+      setOptions(
+        defaultStrategyOptionsFor(
+          next,
+          nextStrategy,
+          // Carrying the old strategy's option values onto a different
+          // strategy would seed it with keys it does not own.
+          nextStrategy === strategyId ? options : defaultOptionsFor(nextStrategy),
+        ),
+      )
+      setPlaylists([])
+      setPlaylist(null)
+      setTracks([])
+      setError(null)
+      setScreen('playlists')
+    },
+    [strategyId, options],
+  )
 
   const undoLast = useCallback(async () => {
     if (!playlist) return
@@ -388,6 +422,7 @@ export function useSorterApp(auth, demo = null) {
     screen,
     setScreen,
     source,
+    capabilitySource,
     setSource: changeSource,
     me,
     playlists,

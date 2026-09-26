@@ -750,6 +750,14 @@
   color: var(--amber);
 }
 
+/* Seated but unlit, matching .strategy:disabled. Last, so a key that is both
+   pressed and unavailable reads as unavailable rather than as selected. */
+.option:disabled {
+  cursor: not-allowed;
+  color: var(--flap-faint);
+  background: var(--board);
+}
+
 /* ---- Playlist board rows ---------------------------------------------- */
 
 .pl-row {
