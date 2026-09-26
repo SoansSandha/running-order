@@ -22,7 +22,11 @@ import { applyMoveOps, buildMoveOps } from '../plan/diff.js'
 import { executeReorder } from '../plan/execute.js'
 import { buildRestoreOrder, createSnapshot, loadSnapshot, saveSnapshot } from '../plan/undo.js'
 import { createSpotifyWriter } from '../services/spotify/writer.js'
-import { defaultStrategyOptionsFor, supportedStrategyFor } from '../services/capabilities.js'
+import {
+  defaultStrategyOptionsFor,
+  supportedStrategyFor,
+  unsupportedOptionReason,
+} from '../services/capabilities.js'
 import { createYouTubeClient } from '../services/youtube/client.js'
 import { toAppPlaylists } from '../services/youtube/playlists.js'
 import { normalizeYouTubeTracks } from '../services/youtube/track.js'
@@ -211,9 +215,16 @@ export function useSorterApp(auth, demo = null) {
     [capabilitySource],
   )
 
-  const setOption = useCallback((key, value) => {
-    setOptions((current) => ({ ...current, [key]: value }))
-  }, [])
+  const setOption = useCallback(
+    (key, value) => {
+      // The panel seats an unhonourable choice unlit, so this is the second
+      // line of defence rather than the first — but it is the one that
+      // decides, and it keeps any other caller from reaching the same state.
+      if (unsupportedOptionReason(capabilitySource, strategyId, key, value)) return
+      setOptions((current) => ({ ...current, [key]: value }))
+    },
+    [capabilitySource, strategyId],
+  )
 
   const loadCsv = useCallback(async (file) => {
     setError(null)

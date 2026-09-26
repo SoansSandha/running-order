@@ -9,7 +9,7 @@
 
 import { useRef } from 'react'
 import { STRATEGIES } from '../../sort/index.js'
-import { unsupportedReason } from '../../services/capabilities.js'
+import { unsupportedOptionReason, unsupportedReason } from '../../services/capabilities.js'
 import { artistsOf, formatCount, titleOf } from '../format.js'
 import { CSV_STRATEGY } from '../useSorterApp.js'
 import {
@@ -137,7 +137,12 @@ export function SortScreen({ app }) {
               onToggleSuggestion={toggleSuggestion}
             />
           ) : (
-            <StrategyOptions strategy={strategy} options={options} setOption={setOption} />
+            <StrategyOptions
+              strategy={strategy}
+              options={options}
+              setOption={setOption}
+              source={capabilitySource}
+            />
           )}
 
           {ready ? <OrderPeek tracks={targetTracks} /> : null}
@@ -182,7 +187,7 @@ function OrderPeek({ tracks }) {
   )
 }
 
-function StrategyOptions({ strategy, options, setOption }) {
+function StrategyOptions({ strategy, options, setOption, source }) {
   if (!strategy) return null
 
   return (
@@ -204,6 +209,11 @@ function StrategyOptions({ strategy, options, setOption }) {
               value={options[option.id] ?? option.default}
               onChange={(value) => setOption(option.id, value)}
               choices={option.choices}
+              // The panel used to offer every choice on every service. On
+              // YouTube that meant offering to order within an artist by a
+              // date it does not return, which produced original-index order
+              // under a date-added label.
+              reasonFor={(value) => unsupportedOptionReason(source, strategy.id, option.id, value)}
             />
           ) : (
             <div key={option.id}>

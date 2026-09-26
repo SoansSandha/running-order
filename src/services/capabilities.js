@@ -6,47 +6,85 @@
  * nothing is worse than one that is visibly unavailable, so these are stated
  * rather than hidden (Product Principle 4, spec D20).
  *
- * Pure module: a table and two lookups.
+ * Pure module: tables and lookups.
  */
 
+import { ALBUM_ORDERS } from '../sort/albumGrouped.js'
 import { STRATEGIES } from '../sort/index.js'
 
 const YOUTUBE_MISSING = 'YouTube Music does not provide this'
 
+const NO_DATE_ADDED = `${YOUTUBE_MISSING} — it returns no date added`
+const NO_RELEASE_DATE = `${YOUTUBE_MISSING} — it returns no release year`
+
+/** Whole strategies a source cannot run: `{ source: { strategyId: reason } }`. */
 export const UNSUPPORTED_BY_SOURCE = {
   youtube: {
-    addedAt: `${YOUTUBE_MISSING} — it returns no date added`,
-    releaseDate: `${YOUTUBE_MISSING} — it returns no release year`,
+    addedAt: NO_DATE_ADDED,
+    releaseDate: NO_RELEASE_DATE,
     popularity: `${YOUTUBE_MISSING} — it has no popularity score`,
   },
 }
 
-/** Inner orders of the artist sort, in the same terms. */
-const UNSUPPORTED_INNER_ORDERS = {
-  youtube: new Set(['addedAt', 'releaseDate']),
+/**
+ * Option VALUES a source cannot honour:
+ * `{ source: { strategyId: { optionId: { value: reason } } } }`.
+ *
+ * A strategy can be perfectly runnable while one of the fields it can be
+ * ordered *by* is missing. The artist sort works on YouTube; ordering within
+ * an artist by date added does not. The album sort works on YouTube; putting
+ * the albums in release order does not, because every album ties at null and
+ * the sort falls through to album name while the panel still reads "Release
+ * date". Neither is visible to a table that can only speak about strategy
+ * ids, which is why this one is keyed a level deeper.
+ *
+ * Keying by strategy AND option id is also what keeps it honest: a value is
+ * only ruled out on the strategy that actually owns that option, so a
+ * different strategy holding the same value under the same key is untouched.
+ */
+export const UNSUPPORTED_OPTION_VALUES = {
+  youtube: {
+    artist: {
+      innerOrder: { addedAt: NO_DATE_ADDED, releaseDate: NO_RELEASE_DATE },
+    },
+    album: {
+      albumOrder: { [ALBUM_ORDERS.releaseDate]: NO_RELEASE_DATE },
+    },
+  },
 }
 
-/** Used when a source cannot honour the configured inner order. */
-const FALLBACK_INNER_ORDER = 'title'
-
 /**
- * Strategy ids that own an `innerOrder` option, derived from the strategy
- * registry rather than hardcoded — so a second strategy that grows its own
- * `innerOrder` option is picked up here automatically, and one that merely
- * has an option that happens to be named `innerOrder`'s neighbour is not
- * mistaken for it.
+ * What to put in place of a value the source cannot honour, keyed
+ * `{ strategyId: { optionId: value } }`.
+ *
+ * This is the replacement, not a second statement of what is unavailable —
+ * that is said once, above. Every entry is asserted by the tests to be a
+ * real choice of that option and one no source rules out.
  */
-const STRATEGIES_WITH_INNER_ORDER = new Set(
-  STRATEGIES.filter((strategy) => strategy.options.some((option) => option.id === 'innerOrder')).map(
-    (strategy) => strategy.id,
-  ),
-)
+const FALLBACK_OPTION_VALUES = {
+  artist: { innerOrder: 'title' },
+  album: { albumOrder: ALBUM_ORDERS.name },
+}
 
 /**
  * @returns {string|null} why this strategy is unavailable, or null if it works
  */
 export function unsupportedReason(source, strategyId) {
   return UNSUPPORTED_BY_SOURCE[source]?.[strategyId] ?? null
+}
+
+/**
+ * The same question, one level down: why a source cannot honour one VALUE of
+ * one option of one strategy.
+ *
+ * @returns {string|null} the reason, or null if the value works
+ */
+export function unsupportedOptionReason(source, strategyId, optionId, value) {
+  const byValue = UNSUPPORTED_OPTION_VALUES[source]?.[strategyId]?.[optionId]
+  // hasOwn, not a truthiness check: an option value of 'constructor' would
+  // otherwise find something on Object's prototype and read as unavailable.
+  if (!byValue || !Object.hasOwn(byValue, value)) return null
+  return byValue[value]
 }
 
 /**
@@ -66,21 +104,25 @@ export function supportedStrategyFor(source, strategyId) {
 }
 
 /**
- * Replace any option value the source cannot honour.
+ * Replace every option value the source cannot honour.
  *
- * The artist sort defaults to ordering by date added, which YouTube lacks —
- * left alone, the most-used sort would silently do something other than its
- * label says. Only strategies that actually own an `innerOrder` option are
- * touched, so a strategy whose unrelated option happens to hold the same
- * value as an unsupported inner order is left alone.
+ * Both sorts that group tracks default to ordering their groups by a date
+ * YouTube does not return, so left alone the two most-used sorts would each
+ * quietly do something other than their label says. Driven entirely by
+ * UNSUPPORTED_OPTION_VALUES, so an option that grows a source-specific gap
+ * later is covered by adding it there and nowhere else.
+ *
+ * @param {string} source
+ * @param {string} strategyId
+ * @param {object} baseOptions
+ * @returns {object} a copy, with any unhonourable value replaced
  */
 export function defaultStrategyOptionsFor(source, strategyId, baseOptions) {
   const options = { ...baseOptions }
-  if (
-    STRATEGIES_WITH_INNER_ORDER.has(strategyId) &&
-    UNSUPPORTED_INNER_ORDERS[source]?.has(options.innerOrder)
-  ) {
-    options.innerOrder = FALLBACK_INNER_ORDER
+  for (const optionId of Object.keys(options)) {
+    if (!unsupportedOptionReason(source, strategyId, optionId, options[optionId])) continue
+    const fallback = FALLBACK_OPTION_VALUES[strategyId]?.[optionId]
+    if (fallback !== undefined) options[optionId] = fallback
   }
   return options
 }

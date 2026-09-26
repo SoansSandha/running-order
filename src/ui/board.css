@@ -758,6 +758,15 @@
   background: var(--board);
 }
 
+/* Set beneath the row, matching .strategy-reason, so an unlit key is never
+   left to be read as broken. */
+.option-reason {
+  font-size: var(--fs-sub);
+  color: var(--amber);
+  margin: 6px 0 0;
+  max-width: 52ch;
+}
+
 /* ---- Playlist board rows ---------------------------------------------- */
 
 .pl-row {

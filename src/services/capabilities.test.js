@@ -1,11 +1,29 @@
 import { describe, expect, test } from 'vitest'
-import { STRATEGIES } from '../sort/index.js'
+import { STRATEGIES, defaultOptionsFor } from '../sort/index.js'
+import { ALBUM_ORDERS } from '../sort/albumGrouped.js'
 import {
   UNSUPPORTED_BY_SOURCE,
+  UNSUPPORTED_OPTION_VALUES,
   defaultStrategyOptionsFor,
   supportedStrategyFor,
+  unsupportedOptionReason,
   unsupportedReason,
 } from './capabilities.js'
+
+/** Every (source, strategy, option, choice) the registry and table describe. */
+function everyChoice() {
+  const rows = []
+  for (const source of ['spotify', 'youtube']) {
+    for (const strategy of STRATEGIES) {
+      for (const option of strategy.options) {
+        for (const choice of option.choices ?? []) {
+          rows.push({ source, strategy, option, choice })
+        }
+      }
+    }
+  }
+  return rows
+}
 
 describe('unsupportedReason', () => {
   test('Spotify supports every strategy', () => {
@@ -116,5 +134,140 @@ describe('supportedStrategyFor', () => {
 
   test('leaves an unknown source fully capable', () => {
     expect(supportedStrategyFor('something-else', 'addedAt')).toBe('addedAt')
+  })
+})
+
+describe('unsupportedOptionReason', () => {
+  test('Spotify honours every choice of every option', () => {
+    for (const { source, strategy, option, choice } of everyChoice()) {
+      if (source !== 'spotify') continue
+      expect(unsupportedOptionReason(source, strategy.id, option.id, choice.value)).toBeNull()
+    }
+  })
+
+  // The artist sort itself runs on YouTube — only some of the fields it can
+  // be ordered by are missing. A table keyed on strategy ids alone cannot
+  // say that, which is why this lookup exists.
+  test("names the artist sort's inner orders YouTube cannot honour", () => {
+    expect(unsupportedReason('youtube', 'artist')).toBeNull()
+    for (const value of ['addedAt', 'releaseDate']) {
+      expect(unsupportedOptionReason('youtube', 'artist', 'innerOrder', value)).toMatch(/YouTube/)
+    }
+  })
+
+  test("leaves the artist sort's inner orders YouTube can honour alone", () => {
+    for (const value of ['album', 'title']) {
+      expect(unsupportedOptionReason('youtube', 'artist', 'innerOrder', value)).toBeNull()
+    }
+  })
+
+  // Every YouTube album ties at a null release date, so the sort silently
+  // falls through to album-name order under a "Release date" label.
+  test('names the release-date album order YouTube cannot honour', () => {
+    expect(unsupportedReason('youtube', 'album')).toBeNull()
+    expect(
+      unsupportedOptionReason('youtube', 'album', 'albumOrder', ALBUM_ORDERS.releaseDate),
+    ).toMatch(/YouTube/)
+    expect(unsupportedOptionReason('youtube', 'album', 'albumOrder', ALBUM_ORDERS.name)).toBeNull()
+  })
+
+  // The value is keyed under the strategy that owns the option, so the same
+  // value under the same key on another strategy is a different question.
+  test('rules a value out only on the strategy that owns that option', () => {
+    expect(unsupportedOptionReason('youtube', 'title', 'innerOrder', 'addedAt')).toBeNull()
+    expect(unsupportedOptionReason('youtube', 'artist', 'albumOrder', 'releaseDate')).toBeNull()
+  })
+
+  test('treats an unknown source, strategy, option or value as honoured', () => {
+    expect(unsupportedOptionReason('something-else', 'artist', 'innerOrder', 'addedAt')).toBeNull()
+    expect(unsupportedOptionReason('youtube', 'nope', 'innerOrder', 'addedAt')).toBeNull()
+    expect(unsupportedOptionReason('youtube', 'artist', 'nope', 'addedAt')).toBeNull()
+    expect(unsupportedOptionReason('youtube', 'artist', 'innerOrder', 'nope')).toBeNull()
+  })
+
+  // A plain property read would find Object.prototype.constructor here and
+  // report a real choice as unavailable.
+  test('does not mistake a prototype key for a table entry', () => {
+    expect(unsupportedOptionReason('youtube', 'artist', 'innerOrder', 'constructor')).toBeNull()
+    expect(unsupportedOptionReason('youtube', 'artist', 'innerOrder', 'toString')).toBeNull()
+  })
+
+  // A typo anywhere in the four levels disables nothing, or disables
+  // something that does not exist. Both fail quietly, so assert it is real.
+  test('every strategy, option and value in the table is real', () => {
+    const byId = new Map(STRATEGIES.map((s) => [s.id, s]))
+    for (const [, byStrategy] of Object.entries(UNSUPPORTED_OPTION_VALUES)) {
+      for (const [strategyId, byOption] of Object.entries(byStrategy)) {
+        const strategy = byId.get(strategyId)
+        expect(strategy).toBeDefined()
+        for (const [optionId, byValue] of Object.entries(byOption)) {
+          const option = strategy.options.find((o) => o.id === optionId)
+          expect(option).toBeDefined()
+          const values = option.choices.map((c) => c.value)
+          for (const [value, reason] of Object.entries(byValue)) {
+            expect(values).toContain(value)
+            expect(typeof reason).toBe('string')
+            expect(reason.length).toBeGreaterThan(0)
+          }
+        }
+      }
+    }
+  })
+})
+
+describe('defaultStrategyOptionsFor, generalised beyond innerOrder', () => {
+  // The album sort defaults to release order, which every YouTube album
+  // ties on — so it fell through to album-name order while the option row
+  // still read "Release date".
+  test("replaces the album sort's release-date order on YouTube", () => {
+    const out = defaultStrategyOptionsFor('youtube', 'album', {
+      albumOrder: ALBUM_ORDERS.releaseDate,
+    })
+    expect(out.albumOrder).toBe(ALBUM_ORDERS.name)
+  })
+
+  test('leaves the album sort alone on Spotify', () => {
+    const base = { albumOrder: ALBUM_ORDERS.releaseDate }
+    expect(defaultStrategyOptionsFor('spotify', 'album', base)).toEqual(base)
+  })
+
+  test('keeps an album order YouTube can honour', () => {
+    const out = defaultStrategyOptionsFor('youtube', 'album', { albumOrder: ALBUM_ORDERS.name })
+    expect(out.albumOrder).toBe(ALBUM_ORDERS.name)
+  })
+
+  test('rewrites whichever unhonourable value the option holds', () => {
+    for (const value of ['addedAt', 'releaseDate']) {
+      expect(
+        defaultStrategyOptionsFor('youtube', 'artist', { innerOrder: value }).innerOrder,
+      ).toBe('title')
+    }
+  })
+
+  test('does not invent keys the caller did not pass', () => {
+    expect(defaultStrategyOptionsFor('youtube', 'album', {})).toEqual({})
+  })
+
+  // The property that actually matters: whatever a source is handed, what
+  // comes back can be honoured. This is what stops a strategy default
+  // drifting out of step with the table again.
+  test('every strategy default comes back honourable on every source', () => {
+    for (const source of ['spotify', 'youtube']) {
+      for (const strategy of STRATEGIES) {
+        const out = defaultStrategyOptionsFor(source, strategy.id, defaultOptionsFor(strategy.id))
+        for (const [optionId, value] of Object.entries(out)) {
+          expect(unsupportedOptionReason(source, strategy.id, optionId, value)).toBeNull()
+        }
+      }
+    }
+  })
+
+  test('every replacement it can reach is a real choice of that option', () => {
+    for (const { source, strategy, option, choice } of everyChoice()) {
+      const out = defaultStrategyOptionsFor(source, strategy.id, { [option.id]: choice.value })
+      const values = option.choices.map((c) => c.value)
+      expect(values).toContain(out[option.id])
+      expect(unsupportedOptionReason(source, strategy.id, option.id, out[option.id])).toBeNull()
+    }
   })
 })
