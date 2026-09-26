@@ -125,7 +125,10 @@
 }
 
 .board-playlists {
-  --cols: 64px minmax(0, 1fr) 14ch 11ch;
+  /* Access gets its own track. Sharing Tracks' width meant a "CLONE ONLY"
+     chip plus the count needed ~125px in an 11ch column, and because the
+     cell is justify-content: flex-end the excess spilled LEFT, over Owner. */
+  --cols: 64px minmax(0, 1fr) 14ch 7ch 13ch;
   --row-h: 58px;
 }
 
@@ -659,7 +662,8 @@
 }
 
 .strategy-name,
-.strategy-note {
+.strategy-note,
+.strategy-reason {
   display: block;
   position: relative;
   z-index: 1;
@@ -698,6 +702,23 @@
   margin-top: 2px;
 }
 
+/* Disabled reads as an unlit flap, matching .lever:disabled — the row stays
+   seated but its characters dim, and the reason takes the note's place so
+   the control never goes quiet about why it cannot be chosen. */
+.strategy:disabled {
+  cursor: not-allowed;
+}
+
+.strategy:disabled .strategy-name {
+  color: var(--flap-faint);
+}
+
+.strategy-reason {
+  font-size: var(--fs-sub);
+  color: var(--amber);
+  margin-top: 2px;
+}
+
 /* ---- Option groups ---------------------------------------------------- */
 
 .option-row {
@@ -707,6 +728,15 @@
   border: 1px solid var(--rule);
   width: fit-content;
   max-width: 100%;
+}
+
+/* Sized to stand in a row of levers rather than in an options panel: the
+   panel's smaller option would otherwise read as a different kind of thing.
+   Mirrors .lever-quiet's padding, font size and tracking exactly. */
+.option-row-inline .option {
+  font-size: var(--fs-control);
+  letter-spacing: 0.14em;
+  padding: 11px 20px;
 }
 
 .option {
@@ -730,6 +760,23 @@
 .option[aria-pressed='true'] {
   background: var(--amber-deep);
   color: var(--amber);
+}
+
+/* Seated but unlit, matching .strategy:disabled. Last, so a key that is both
+   pressed and unavailable reads as unavailable rather than as selected. */
+.option:disabled {
+  cursor: not-allowed;
+  color: var(--flap-faint);
+  background: var(--board);
+}
+
+/* Set beneath the row, matching .strategy-reason, so an unlit key is never
+   left to be read as broken. */
+.option-reason {
+  font-size: var(--fs-sub);
+  color: var(--amber);
+  margin: 6px 0 0;
+  max-width: 52ch;
 }
 
 /* ---- Playlist board rows ---------------------------------------------- */
@@ -799,8 +846,10 @@
 
   .col-artist,
   .col-added,
+  .col-access,
   .row-artist,
-  .row-added {
+  .row-added,
+  .pl-access {
     display: none;
   }
 

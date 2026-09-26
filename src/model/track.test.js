@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { normalizePlaylistItem, normalizePlaylistItems } from './track.js'
+import { makeTracks } from '../test/factory.js'
 
 const fullItem = {
   added_at: '2021-03-04T12:00:00Z',
@@ -180,5 +181,14 @@ describe('normalizePlaylistItems', () => {
   test('numbers tracks by fetch position so original order is always recoverable', () => {
     const tracks = normalizePlaylistItems([fullItem, { track: null }, fullItem])
     expect(tracks.map((t) => t.originalIndex)).toEqual([0, 1, 2])
+  })
+})
+
+describe('normalizePlaylistItem — source and item id', () => {
+  test('carries its source and a null item id', () => {
+    const [track] = makeTracks([{ name: 'a' }])
+    expect(track.source).toBe('spotify')
+    // Spotify addresses a reorder by index, so there is no per-item id to carry.
+    expect(track.itemId).toBeNull()
   })
 })

@@ -9,6 +9,7 @@
 
 import { useRef } from 'react'
 import { STRATEGIES } from '../../sort/index.js'
+import { unsupportedOptionReason, unsupportedReason } from '../../services/capabilities.js'
 import { artistsOf, formatCount, titleOf } from '../format.js'
 import { CSV_STRATEGY } from '../useSorterApp.js'
 import {
@@ -32,6 +33,7 @@ const CSV_FIELDS = [
 
 export function SortScreen({ app }) {
   const {
+    capabilitySource,
     playlist,
     tracks,
     busy,
@@ -48,6 +50,7 @@ export function SortScreen({ app }) {
     toggleSuggestion,
     setScreen,
     targetTracks,
+    writeBlocked,
   } = app
 
   const fileInput = useRef(null)
@@ -63,8 +66,11 @@ export function SortScreen({ app }) {
           { label: 'Tracks', value: formatCount(tracks.length) },
           {
             label: 'Access',
-            value: playlist?.editable ? 'EDITABLE' : 'CLONE ONLY',
-            tone: playlist?.editable ? 'green' : 'amber',
+            // Three states, not two. "CLONE ONLY" on a source with no writer
+            // would promise a clone the app cannot perform, which is the
+            // same lie "EDITABLE" was telling.
+            value: writeBlocked ? 'READ ONLY' : playlist?.editable ? 'EDITABLE' : 'CLONE ONLY',
+            tone: !writeBlocked && playlist?.editable ? 'green' : 'amber',
           },
         ]}
       />
@@ -91,18 +97,25 @@ export function SortScreen({ app }) {
           <p className="col-label" style={{ marginBottom: 10 }}>
             Order by
           </p>
-          {STRATEGIES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="strategy"
-              aria-pressed={strategyId === item.id}
-              onClick={() => chooseStrategy(item.id)}
-            >
-              <span className="strategy-name">{item.label}</span>
-              <span className="strategy-note">{item.description}</span>
-            </button>
-          ))}
+          {STRATEGIES.map((item) => {
+            // The open playlist's own service decides, not the toggle that
+            // happens to be showing. They can disagree.
+            const reason = unsupportedReason(capabilitySource, item.id)
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="strategy"
+                aria-pressed={strategyId === item.id}
+                disabled={Boolean(reason)}
+                onClick={() => chooseStrategy(item.id)}
+              >
+                <span className="strategy-name">{item.label}</span>
+                <span className="strategy-note">{item.description}</span>
+                {reason ? <span className="strategy-reason">{reason}</span> : null}
+              </button>
+            )
+          })}
           <button
             type="button"
             className="strategy"
@@ -128,7 +141,12 @@ export function SortScreen({ app }) {
               onToggleSuggestion={toggleSuggestion}
             />
           ) : (
-            <StrategyOptions strategy={strategy} options={options} setOption={setOption} />
+            <StrategyOptions
+              strategy={strategy}
+              options={options}
+              setOption={setOption}
+              source={capabilitySource}
+            />
           )}
 
           {ready ? <OrderPeek tracks={targetTracks} /> : null}
@@ -173,7 +191,7 @@ function OrderPeek({ tracks }) {
   )
 }
 
-function StrategyOptions({ strategy, options, setOption }) {
+function StrategyOptions({ strategy, options, setOption, source }) {
   if (!strategy) return null
 
   return (
@@ -195,6 +213,11 @@ function StrategyOptions({ strategy, options, setOption }) {
               value={options[option.id] ?? option.default}
               onChange={(value) => setOption(option.id, value)}
               choices={option.choices}
+              // The panel used to offer every choice on every service. On
+              // YouTube that meant offering to order within an artist by a
+              // date it does not return, which produced original-index order
+              // under a date-added label.
+              reasonFor={(value) => unsupportedOptionReason(source, strategy.id, option.id, value)}
             />
           ) : (
             <div key={option.id}>

@@ -22,6 +22,15 @@ import { applyMoveOps, buildMoveOps } from '../plan/diff.js'
 import { executeReorder } from '../plan/execute.js'
 import { buildRestoreOrder, createSnapshot, loadSnapshot, saveSnapshot } from '../plan/undo.js'
 import { createSpotifyWriter } from '../services/spotify/writer.js'
+import {
+  defaultStrategyOptionsFor,
+  supportedStrategyFor,
+  unsupportedOptionReason,
+  writeUnsupportedReason,
+} from '../services/capabilities.js'
+import { createYouTubeClient } from '../services/youtube/client.js'
+import { toAppPlaylists } from '../services/youtube/playlists.js'
+import { normalizeYouTubeTracks } from '../services/youtube/track.js'
 import { defaultOptionsFor, sortTracks, strategyById } from '../sort/index.js'
 
 export const CSV_STRATEGY = 'csv'
@@ -49,6 +58,22 @@ export function useSorterApp(auth, demo = null) {
   const [run, setRun] = useState(demo?.run ?? null)
   const [outcome, setOutcome] = useState(demo?.outcome ?? null)
   const abort = useRef(null)
+
+  const [source, setSource] = useState(demo?.source ?? 'spotify')
+  const youtube = useMemo(() => createYouTubeClient({}), [])
+
+  /**
+   * The service any capability question is really about.
+   *
+   * An open playlist knows which service it came from; the toggle only says
+   * which library is being browsed. The two agree right up until they do not
+   * — the toggle is live, so an in-flight library read can land after the
+   * open playlist was cleared — and the row's own service is the one that
+   * decides what can be done to it. Asked once here so no screen can answer
+   * it differently. A Spotify playlist carries no `source`, so it falls
+   * through to the toggle and reads 'spotify' exactly as before.
+   */
+  const capabilitySource = playlist?.source ?? source
 
   /* ---- Derived order ---------------------------------------------------- */
 
@@ -126,6 +151,11 @@ export function useSorterApp(auth, demo = null) {
     setError(null)
     setBusy({ label: 'Reading your library', done: 0, total: 0 })
     try {
+      if (source === 'youtube') {
+        setBusy({ label: 'Reading your YouTube library', done: 0, total: 0 })
+        setPlaylists(toAppPlaylists(await youtube.listPlaylists()))
+        return
+      }
       const profile = await getCurrentUser(client)
       setMe(profile)
       const found = await listEditablePlaylists(client, profile.id, {
@@ -137,7 +167,7 @@ export function useSorterApp(auth, demo = null) {
     } finally {
       setBusy(null)
     }
-  }, [client])
+  }, [client, source, youtube])
 
   const openPlaylist = useCallback(
     async (chosen) => {
@@ -155,6 +185,11 @@ export function useSorterApp(auth, demo = null) {
 
       setBusy({ label: `Reading ${chosen.name}`, done: 0, total: chosen.trackCount })
       try {
+        if (chosen.source === 'youtube') {
+          const fetched = await youtube.fetchPlaylist(chosen.id)
+          setTracks(normalizeYouTubeTracks(fetched.tracks))
+          return
+        }
         const loaded = await fetchPlaylistTracks(client, chosen.id, {
           onProgress: (done, total) =>
             setBusy({ label: `Reading ${chosen.name}`, done, total }),
@@ -166,17 +201,31 @@ export function useSorterApp(auth, demo = null) {
         setBusy(null)
       }
     },
-    [client],
+    [client, youtube],
   )
 
-  const chooseStrategy = useCallback((id) => {
-    setStrategyId(id)
-    setOptions(id === CSV_STRATEGY ? {} : defaultOptionsFor(id))
-  }, [])
+  const chooseStrategy = useCallback(
+    (id) => {
+      setStrategyId(id)
+      setOptions(
+        id === CSV_STRATEGY
+          ? {}
+          : defaultStrategyOptionsFor(capabilitySource, id, defaultOptionsFor(id)),
+      )
+    },
+    [capabilitySource],
+  )
 
-  const setOption = useCallback((key, value) => {
-    setOptions((current) => ({ ...current, [key]: value }))
-  }, [])
+  const setOption = useCallback(
+    (key, value) => {
+      // The panel seats an unhonourable choice unlit, so this is the second
+      // line of defence rather than the first — but it is the one that
+      // decides, and it keeps any other caller from reaching the same state.
+      if (unsupportedOptionReason(capabilitySource, strategyId, key, value)) return
+      setOptions((current) => ({ ...current, [key]: value }))
+    },
+    [capabilitySource, strategyId],
+  )
 
   const loadCsv = useCallback(async (file) => {
     setError(null)
@@ -229,9 +278,20 @@ export function useSorterApp(auth, demo = null) {
   const strategyLabel =
     strategyId === CSV_STRATEGY ? 'CSV' : (strategyById(strategyId)?.label ?? strategyId)
 
+  /**
+   * Why nothing on this playlist can be written. Every lever below refuses
+   * on it, and the preview screen prints it beside them — no write path may
+   * assume it was only ever reached from a lit control.
+   */
+  const writeBlocked = writeUnsupportedReason(capabilitySource)
+
   const applyInPlace = useCallback(
     async ({ dryRun = false } = {}) => {
       if (!playlist) return
+      // Both the real run and the dry run read the live snapshot first, and
+      // that read goes to Spotify with whatever id it is handed. A YouTube
+      // id there is a wrong-service request, not a no-op.
+      if (writeBlocked) return
       setError(null)
       setOutcome(null)
       setScreen('progress')
@@ -248,7 +308,7 @@ export function useSorterApp(auth, demo = null) {
           setRun(null)
           setOutcome({
             kind: 'stale',
-            message: `${playlist.name} changed on Spotify since it was read. Reload it and preview again.`,
+            message: `${playlist.name} changed since it was read. Reload it and preview again.`,
           })
           return
         }
@@ -289,12 +349,16 @@ export function useSorterApp(auth, demo = null) {
         })
       }
     },
-    [client, writer, playlist, tracks, targetTracks, ops, movedKeys],
+    [client, writer, playlist, tracks, targetTracks, ops, movedKeys, writeBlocked],
   )
 
   const applyClone = useCallback(
     async ({ dryRun = false } = {}) => {
       if (!playlist || !me) return
+      // executeClone creates the destination playlist BEFORE it discovers
+      // nothing is cloneable, so one unguarded click left a real empty
+      // playlist in the user's Spotify account.
+      if (writeBlocked) return
       setError(null)
       setOutcome(null)
       setScreen('progress')
@@ -317,13 +381,43 @@ export function useSorterApp(auth, demo = null) {
         setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
       }
     },
-    [writer, playlist, me, targetTracks, strategyLabel],
+    [writer, playlist, me, targetTracks, strategyLabel, writeBlocked],
   )
 
   const cancelRun = useCallback(() => abort.current?.abort(), [])
 
+  const changeSource = useCallback(
+    (next) => {
+      // A strategy the new source cannot honour must not stay selected: it
+      // would render pressed and disabled at once, keep driving the preview,
+      // and be impossible to clear, because the only control that could
+      // clear it is the disabled row itself.
+      const nextStrategy = supportedStrategyFor(next, strategyId)
+      setSource(next)
+      setStrategyId(nextStrategy)
+      setOptions(
+        defaultStrategyOptionsFor(
+          next,
+          nextStrategy,
+          // Carrying the old strategy's option values onto a different
+          // strategy would seed it with keys it does not own.
+          nextStrategy === strategyId ? options : defaultOptionsFor(nextStrategy),
+        ),
+      )
+      setPlaylists([])
+      setPlaylist(null)
+      setTracks([])
+      setError(null)
+      setScreen('playlists')
+    },
+    [strategyId, options],
+  )
+
   const undoLast = useCallback(async () => {
     if (!playlist) return
+    // Unreachable while no write can happen in the first place, but undo is
+    // a write path to the same Spotify client and is gated with the rest.
+    if (writeBlocked) return
     const snapshot = loadSnapshot(playlist.id)
     if (!snapshot) {
       setError('There is no saved snapshot for this playlist.')
@@ -352,11 +446,15 @@ export function useSorterApp(auth, demo = null) {
       setRun(null)
       setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
     }
-  }, [client, writer, playlist])
+  }, [client, writer, playlist, writeBlocked])
 
   return {
     screen,
     setScreen,
+    source,
+    capabilitySource,
+    writeBlocked,
+    setSource: changeSource,
     me,
     playlists,
     busy,

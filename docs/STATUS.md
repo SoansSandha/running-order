@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-16 · **HEAD:** `see git log`
+**Last updated:** 2026-09-24 · **HEAD:** `see git log`
 
 Design and decisions: [2026-09-09-design.md](2026-09-09-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -15,8 +15,9 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **300 tests across 19 files,
-all passing.** Build clean, design detector clean, working tree clean.
+All logic layers and all five screens are built. **323 JavaScript tests across
+21 files, all passing** (plus 12 Python tests for the proxy). Build clean,
+design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
 when YouTube Music support and cross-service reconciliation entered scope —
@@ -57,6 +58,10 @@ playlist), undo, and mid-run cancel.
 | `src/services/spotify/` | `client.js`, `playlists.js`, `mutations.js`, `spotifyAuth.js`, `writer.js` | 69 |
 | `src/auth/` | `pkce.js`, `useAuth.js` | 7 |
 | `src/ui/` | Five screens, board components, app state | — |
+| `src/services/youtube/` | `client.js`, `track.js` | 18 |
+| `proxy/` | `app.py` — local FastAPI proxy for YouTube Music | 12 (pytest) |
+
+**323 JavaScript tests, 12 Python tests.**
 
 ### Load-bearing details worth not rediscovering
 
@@ -150,6 +155,105 @@ titles (only the position numerals flap), no grain on the "enamelled" board
 body, and Connect's empty field is plain ground rather than blank flaps
 (it has no scroller, and banding behind centred copy reads as a backdrop).
 DESIGN.md records these as build gaps rather than system rules.
+
+---
+
+## YouTube Music: deliverable 2a complete
+
+Branch `youtube-mirror-2a`. Design: [2026-09-18-youtube-mirror-design.md](2026-09-18-youtube-mirror-design.md).
+Plans: [read path](superpowers/plans/2026-09-22-youtube-read-path.md) ·
+[in the UI](superpowers/plans/2026-09-24-youtube-in-the-ui.md).
+
+**Confirmed working against a real account on 2026-09-26**, by hand, in a
+browser — not inferred from tests:
+
+| Verified | Result |
+|---|---|
+| YouTube playlists listed, with cover art | Two playlists, correct counts. One created *after* connecting appeared on reload, so the listing is live rather than cached |
+| Opening one | 387 counted, 383 readable, 383 normalized |
+| Strategy gating | Release date, Date added and Popularity disabled, each showing why |
+| **Option-value gating** | Artist → *Date added* and *Album release date* disabled; Album → *Release date* disabled with *Album name A to Z* selected instead |
+| Switching source off a disabled strategy | Falls back to a supported one rather than staying selected-and-disabled |
+| Writes blocked | Apply, Clone, Dry run and Undo all refuse a YouTube playlist, with the reason on hover. Access reads **Read only** |
+| Spotify unaffected | A real artist sort applied successfully to a Spotify playlist |
+
+Both plans' tasks are done, reviewed, and green: **372 JavaScript tests, 13
+Python tests**.
+
+| Task | State |
+|---|---|
+| 1 — `keyOf` on `executeReorder` | **Done.** The planner can key a move plan on a service's own per-item id |
+| 2 — `source` / `itemId` on Track | **Done.** 23-key Track shape, ready for a second normalizer |
+| 3 — Proxy scaffold + auth status | **Done.** FastAPI on `127.0.0.1:8787`, CORS-locked, credentials proven to load |
+| 4 — Proxy playlist endpoints | **Done.** `GET /playlists` and `GET /playlists/{id}`; both now return a clean `HTTPException(502)` on failure instead of an unhandled traceback, and `POST /auth/status` makes one authenticated call to detect a session YouTube killed server-side |
+| 5 — JS client for the proxy | **Done.** `src/services/youtube/client.js` — a plain fetch wrapper; `ProxyUnavailableError` points at the `uvicorn` command that actually starts the proxy |
+| 6 — YouTube → Track normalizer | **Done.** `src/services/youtube/track.js` — maps onto the shared Track shape, numbers accepted rows densely, and drops rows with no `setVideoId` |
+
+### The UI plan, and what its final review caught
+
+[2026-09-24-youtube-in-the-ui.md](superpowers/plans/2026-09-24-youtube-in-the-ui.md)
+added the source toggle, the capability table, and the write guards. Its final
+review blocked the merge on two Critical defects that the four per-task
+reviews could not see, because each existed only *between* two commits:
+
+- **Switching source never loaded the new library.** The toggle sits on the
+  playlists screen, so the screen never unmounted and its one-shot fetch guard
+  stayed set. The user would have seen "returned no playlists for this
+  account" — a false statement, as the feature's first words.
+- **Spotify write levers stayed live on a YouTube playlist.** "Clone and sort"
+  had no guard at all, and would have created a real empty playlist in the
+  user's Spotify account. `Preview.jsx` was in no task's diff, so no per-task
+  reviewer ever opened it. Fixing it turned up two further write paths nobody
+  had listed: the dry run shared a Spotify snapshot read, and undo.
+
+The plan had named a manual browser walkthrough as the only gate for the UI
+layer, since this repo has no component-test infrastructure. That walkthrough
+was skipped, and the first Critical was step 2 of its own script. **Where a
+plan names a manual gate, run it before calling the work reviewable.**
+
+### What the live spike established
+
+Measured against the real 379-track library on 2026-09-22, not taken from docs.
+Three of these contradicted the documentation:
+
+| | |
+|---|---|
+| `setVideoId` | Present on 379/379, **379 distinct** — safe to key a reorder on. This is what unblocked Task 1 |
+| `trackCount` vs items returned | **382 vs 379.** Three items are counted and never returned |
+| `get_playlist` default | Returned **200**, not the 100 the signature implies |
+| `album` | Absent on **151 of 379** rows — the album sort is worse than "no track number" |
+| `videoType` | `ATV` 224, `OMV` 132, `UGC` 10, untyped 13 |
+| Field set | Varies by row — `feedbackTokens` exists on album tracks, absent on videos and uploads |
+
+### Authentication: browser credentials, not OAuth
+
+OAuth dead-ends for a local single-user tool. Google expires refresh tokens
+after **7 days** for any External app in Testing status, and `youtube` is not
+an exempt scope; publishing to Production needs a home page, privacy policy
+and a verifiable authorised domain. Browser auth needs no Google Cloud project
+and lasts roughly two years. Recorded as D22 with the evidence.
+
+`ytmusicapi` labels browser auth deprecated, so it is **pinned to `==1.12.3`**.
+Checked rather than assumed: as of that version it is a soft deprecation —
+`auth/browser.py` is fully wired and raises no `DeprecationWarning`.
+
+`proxy/browser.json` is gitignored and holds session cookies. Treat it like a
+password; it is not in the repository and must never be.
+
+### Carried into the next session
+
+- **Security, before write endpoints land (2c):** CORS constrains browsers
+  only — it does not stop `curl`. All protection currently rests on the
+  `127.0.0.1` bind alone, with no second layer such as a shared-secret header.
+  Fine for a local read-only tool; decide deliberately before the proxy can
+  write.
+- **`get_client()` caches at process scope with no lock.** Harmless with one
+  read-only endpoint; a latent race if concurrent handling is added.
+- **`buildMoveOps` now enforces non-null keys** alongside uniqueness, since
+  `null` is the `beforeKey` end-of-list sentinel; `executeReorder` inherits
+  this by calling `buildMoveOps`. Task 6's adapter also drops rows with a
+  null `setVideoId` at the boundary, so the check is defence in depth rather
+  than the only guard.
 
 ---
 

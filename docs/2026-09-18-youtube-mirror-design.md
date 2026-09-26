@@ -36,7 +36,7 @@ track carries `videoId`, `setVideoId`, `title`, `artists`, `album`,
 | Sort | On YouTube Music natively |
 |---|---|
 | Artist · Title · Duration · Shuffle · Reverse | Works |
-| Album | Degraded — groups by album, but no track number, so order *within* an album is arbitrary |
+| Album | Badly degraded — no track number, *and* `album` is absent on 40% of tracks (measured: present on 228 of 379 in the real library). Anything sourced from a music video or a user upload carries no album at all |
 | **Date added** | **Absent.** It is the default inner order for the artist sort |
 | Release date | Absent — no per-track release year |
 | Popularity | No equivalent |
@@ -88,6 +88,7 @@ Continuing the numbering in the original design doc.
 | D19 | **Adding missing tracks to YouTube is in scope**, one direction only | Reorder-only, as D3 confined the CSV | "Sync" means little if the two playlists never converge in *contents*. D3 refused membership changes because adding needs a search layer and a disambiguation UI — both of which 2b builds anyway. It stays one-directional because writing to Spotify from a guess would compromise the canonical list (D10) |
 | D20 | **YouTube sorts standalone, with a per-source capability registry** | Dropping the mode; or offering all nine and letting three fail | Five strategies work on YouTube's metadata and a sixth degrades honestly. Dropping them would remove working functionality; offering all nine would put controls on screen that quietly do nothing, which Product Principle 4 forbids. So each source declares what it supports and the UI disables the rest with the reason visible |
 | D21 | **No YouTube Data API** | Adding it back to recover date-added | Date-added is wanted on Spotify, where it already works. It is not wanted on YouTube, so the one field the Data API would recover has no user behind it. Declined on need, not on cost |
+| D22 | **Browser credentials, not OAuth**, for YouTube | ytmusicapi's OAuth flow | Google expires refresh tokens after 7 days for any External app in Testing status, and `youtube` is not an exempt scope. Publishing to Production requires a home page, privacy policy and verifiable authorised domain — a local single-user tool has none. Browser credentials need no Google Cloud project and last ~2 years. See §5 |
 
 ---
 
@@ -98,7 +99,7 @@ independently verifiable.
 
 | | Deliverable | Proves | Writes? |
 |---|---|---|---|
-| **2a** | Service boundary, proxy, Google auth, YouTube read-only | The seam, OAuth, and the adapter work | None |
+| **2a** | Service boundary, proxy, YouTube auth, YouTube read-only | The seam, auth, and the adapter work | None |
 | **2b** | Cross-service matching and the confirmation surface | The hard problem | None |
 | **2c** | Mirror execution — fill, then order | Writes, preview, undo | Yes |
 
@@ -192,7 +193,7 @@ Started alongside Vite by `npm run dev`.
 | Route | Purpose |
 |---|---|
 | `GET /auth/status` | Whether a Google credential is present |
-| `POST /auth/begin`, `POST /auth/complete` | ytmusicapi's OAuth flow |
+| `POST /auth/status` | Whether stored browser credentials still authenticate |
 | `GET /playlists` | The user's playlists |
 | `GET /playlists/{id}` | Its tracks |
 | `GET /search` | Song search — candidates for the fill half |
@@ -216,17 +217,78 @@ wrong, which is why they are recorded here rather than left to discovery:
 
 | Constraint | Consequence if missed |
 |---|---|
-| `get_playlist(limit=...)` **defaults to 100** | A 414-track playlist silently truncates to 100. The proxy always passes an explicit limit |
+| `get_playlist(limit=...)` truncates by default | Measured against the real 379-track playlist: the default returned **200**, not the 100 the signature suggests — it reads whole pages. Either way it truncates. The proxy always passes `limit=None` |
+| `trackCount` can exceed the items returned | Measured: `trackCount` 382, items returned 379, stable across three fetches. Three items are counted by YouTube but never returned. See "Items that cannot be read" below |
 | A playlist carries a display `sortOrder` (`MANUAL` / `NEWEST_FIRST` / `NEWEST_LAST` / `TOP_VOTED`) | If it is not `MANUAL`, a manual reorder may not be what is displayed. Checked before ordering, and surfaced rather than silently changed |
 | `add_playlist_items(..., duplicates=False)` | The library's own double-add guard. Used, as a second line behind our own |
-| OAuth needs a client id **and secret** (Google, since Nov 2024) | A secret cannot live in a browser. It lives in the proxy — see below |
+| Browser credentials carry session cookies | Full account access — more sensitive than a client secret. Proxy-held, never served to the page |
 
-### Why the secret settles the architecture
+### Authentication: browser credentials, not OAuth (D22)
 
-Spotify uses PKCE specifically so there is no secret to protect. Google issues
-one. That makes the proxy not merely convenient but the only correct home for
-the credential: D12 was chosen for CORS, and the credential model independently
-requires the same thing.
+`ytmusicapi` offers two methods. We use **browser authentication** — request
+headers copied once from a logged-in `music.youtube.com` session, stored as
+`browser.json`.
+
+The OAuth route was attempted first and abandoned on evidence. It needs a
+Google Cloud project and a "TVs and Limited Input devices" client, and Google
+issues **refresh tokens that expire after 7 days** for any External app whose
+publishing status is Testing. `youtube` is not in the exempt scope set, so the
+only fix is publishing to Production — which requires a home page, a privacy
+policy URL, and a verifiable authorised domain. A local single-user tool has
+none of those, so OAuth means re-authorising weekly, forever.
+
+Browser credentials last roughly two years while the session stays valid, and
+need no Google Cloud project at all.
+
+| | OAuth | Browser auth |
+|---|---|---|
+| Google Cloud project | Required | None |
+| Lifetime | 7 days unless published | ~2 years |
+| Publishing prerequisites | Domain + privacy policy | — |
+| Playlist editing | Yes | Yes |
+
+The trade is threefold: a fiddlier one-time setup (copying headers out of
+devtools), credentials that die if the user signs out of YouTube Music, and
+**ytmusicapi labels browser auth "deprecated"** in its CLI help.
+
+That last one was checked rather than assumed. As of 1.12.3 it is a soft
+deprecation: `ytmusicapi/auth/browser.py` is fully present and wired, and no
+`DeprecationWarning` is raised — unlike `subscribe_artists`, which does raise
+one. It is a nudge toward OAuth, not a scheduled removal.
+
+Two mitigations, because "soft today" is not "safe forever":
+
+- **Pin `ytmusicapi` to an exact version** in the proxy's `requirements.txt`,
+  so an incidental upgrade cannot remove the auth method underneath a working
+  install.
+- **D13 contains the blast radius.** The proxy holds auth and transport and
+  nothing else, so if browser auth is eventually removed, the change is
+  confined to the proxy's auth call. No JavaScript moves, and no test changes.
+
+If Google's publishing requirements ever become satisfiable for this project —
+a domain with a privacy policy — OAuth becomes the better long-term choice and
+this decision should be revisited.
+
+**This does not weaken D12.** CORS was always the primary reason a local
+process is required, and that is unchanged. It sharpens the credential
+argument rather than removing it: session cookies are *more* sensitive than a
+client secret would have been, and they now never reach the browser at all.
+
+### The bind address is the only control (decide before 2c)
+
+CORS constrains **browsers only**. It does not stop `curl`, another local
+process, or anything that is not a browser honouring it. So every bit of the
+proxy's protection currently rests on binding `127.0.0.1` — there is no second
+layer, no shared-secret header, no token.
+
+That is proportionate while the proxy is read-only on one machine. It stops
+being proportionate when 2c gives it endpoints that **write to a playlist**,
+because at that point any local process can reorder or add to the user's
+library by calling an unauthenticated localhost port.
+
+Decide this deliberately before the first write endpoint ships: either accept
+it explicitly, or add a shared secret the Vite app sends and the proxy checks.
+Raised by the Task 3 security review, 2026-09-22.
 
 ### When the proxy is not running
 
@@ -251,6 +313,28 @@ its own API directly and has no dependency on the proxy.
 `videoId`. The two are deliberately separate fields because they have
 different lifetimes: `id` is stable, `itemId` is reissued whenever the
 playlist's membership changes. §11 depends on that distinction.
+
+**`setVideoId` is safe to key a reorder on.** Measured against the real
+379-track playlist: present on 379 of 379 rows, and **379 distinct values for
+379 rows**. That is structural rather than lucky — `setVideoId` identifies a
+playlist *item*, so two copies of the same song carry different ones, which is
+exactly the property `videoId` lacks and `diff.js` requires. The adapter must
+still refuse a row whose `setVideoId` is null rather than key on it, because
+`null` is the `beforeKey` end-of-list sentinel (§4).
+
+### Items that cannot be read
+
+The real playlist reports `trackCount` 382 while returning 379 items,
+consistently. Three items are counted and not returned — most likely fully
+deleted videos. They are not the unavailable ones: all five unavailable tracks
+*are* returned, with both ids intact.
+
+This is a "never lose a track" problem, so it gets stated rather than
+absorbed: **the count difference is surfaced before any write** — *"YouTube
+reports 382 items; 379 could be read. 3 cannot be read and will not be
+touched."* Unreadable items are never counted as YouTube-only extras, never
+sunk, and never included in a move plan, because an item we cannot see is one
+we cannot reason about.
 
 A YouTube track normalizes into the same shape as a Spotify one, with the
 absent fields honestly empty rather than invented: no `addedAt`, no
@@ -499,9 +583,10 @@ question dissolved with the Data API.
   change it — a visible change to the user's own view settings, which wants
   consent — or refuse and explain. Cheap to answer in 2a against a real
   playlist; expensive to guess at now.
-- **Does playlist *editing* work under OAuth?** Uploads are the only carve-out
-  the docs name, so it should. "Should" is not "does", and it is the first
-  thing 2a proves.
+- **Does playlist *editing* work under browser auth?** It should — browser
+  auth is the fuller of the two methods, and the docs' only carve-out runs the
+  other way (uploads work under browser auth but not OAuth). "Should" is not
+  "does", and it is the first thing 2a proves.
 
 ### Carried forward from the write-seam branch (2026-09-20)
 
@@ -514,16 +599,105 @@ shipped.
 - **A writer cannot resolve `op.key` to a service item id.** `executeReorder`
   keys its plan on `track.originalIndex`, so a YouTube writer receives
   `{ key: 7, beforeKey: 3 }` and has no way to reach the `setVideoId` it must
-  actually send. Deferred deliberately: keying by `itemId` instead makes
-  `null` ambiguous the moment a track has no `setVideoId` (it is already the
-  `beforeKey` end-of-list sentinel), and `diff.js`'s correctness rests on key
-  uniqueness, which `itemId` has not been shown to have. §6 adds `Track.itemId`
-  in 2a — that is when this gets decided against a real writer instead of a
-  guessed one. **Settle it before writing the YouTube writer, not after.**
+  actually send.
+
+  **Resolved 2026-09-22 against real data, not guessed.** The two objections
+  that caused the deferral both fail on measurement: `setVideoId` is present on
+  379 of 379 rows and holds 379 distinct values, so it has the uniqueness
+  `diff.js` requires, and there are no nulls to collide with the `beforeKey`
+  sentinel. So `executeReorder` gains a `keyOf` option defaulting to
+  `(track) => track.originalIndex`; the YouTube caller passes
+  `(track) => track.itemId`. The adapter rejects a null `setVideoId` at
+  normalization rather than letting it reach the planner.
 - **`clone.test.js` asserts Spotify's 100-item batch boundaries** through the
   now service-neutral seam. The neutral contract requires no particular batch
   size, so when a second writer lands this should become "onProgress is
   forwarded, and the final call is `(total, total)`".
+### Carried forward from the read-path branch (2026-09-24)
+
+Deliverable 2a's read path shipped. Its final review found no Critical defects
+but named work the next plan must own. Recorded here, not in a scratch ledger.
+
+**Must be decided before a UI reads the YouTube path:**
+
+- **`isUnavailable` means two different things across the seam.** On Spotify it
+  means the row came back `null` — no metadata at all, which is why `sort/`
+  sinks those rows to the bottom of every sort. On YouTube it means
+  region-blocked or removed, and the row still carries full title, artists,
+  album and duration.
+
+  **Confirmed against the live library 2026-09-24, no longer a prediction.**
+  A *date-added* sort — a field YouTube does not have, so it should move
+  nothing — produced exactly **5 move operations, every one of them an
+  unavailable track being sunk to the bottom**. The same 5 sink on every
+  strategy whose fields YouTube lacks. Each carries a real title, artist and
+  duration. Once 2c ships, that is 5 permanent misplacements per sort. The flag is genuinely useful; what is wrong is that
+  `sort/` treats "unavailable" as "unsortable". Deferred deliberately: fixing
+  it means changing proven Spotify sorting code with no consumer to test
+  against. **Decide it when the UI lands, not by inheritance.**
+- **A stale session and a genuinely unreorderable playlist are
+  indistinguishable** to a caller of `normalizeYouTubeTracks` — both give `[]`.
+  No code change is needed: `/playlists/{id}` already returns `readable`
+  alongside the track array, so `readable > 0 && accepted === 0` is the
+  unambiguous signal. The 2b UI must check it rather than rendering "empty
+  playlist".
+
+### Carried forward from the UI branch (2026-09-25)
+
+The source toggle, the capability gating and the write-lever guards shipped.
+Its final review blocked the merge on two Criticals — a source switch that
+never loaded the new library, and Spotify write levers left live on a YouTube
+playlist where "Clone and sort" would have created a real empty playlist in
+the user's Spotify account. Both fixed. These four were deferred deliberately:
+
+- **The two track counts are shown without explanation.** The playlists board
+  shows `trackCount` (386) and the sort screen shows what loaded (383). §6
+  requires the difference be stated; 2a has no writes so the letter of "before
+  any write" is not breached, but two unexplained numbers on consecutive
+  screens is exactly what this codebase otherwise refuses to do.
+- **`readable` is fetched and discarded.** §14 names `readable > 0 && accepted
+  === 0` the unambiguous stale-session signal and assigns it to the 2b UI —
+  but this branch is the first UI to render the path, so a stale session now
+  shows a silent empty board with no error at all.
+- **The CSV strategy sits outside the capability table.** It is not a
+  `STRATEGIES` entry, so `unsupportedReason` never sees it, and it stays
+  enabled on YouTube. It degrades rather than breaks, but its URI and ISRC
+  column pickers can never match a YouTube track.
+- **`isUnavailable` — the decision is hereby recorded as taken, not
+  inherited.** §14 asked for it to be decided "when the UI lands, not by
+  inheritance". The UI has landed and the decision is: **defer the change, do
+  not pretend it is not a defect.** Changing what `sort/` treats as unsortable
+  means editing proven Spotify code, and the right shape is clearer once a
+  YouTube *write* exists to make the misplacement permanent. The live cost is
+  measured and accepted for now: 5 tracks with full title, artist and duration
+  sink to the bottom of every sort.
+
+**Known degradations, to surface with D20's capability gating:**
+
+- **The album sort puts album-less rows in one nameless block at the *top*.**
+  They key on `sortKey('')`, which sorts before every real album name — 151 of
+  379 tracks in the measured library, inverting this codebase's own convention
+  that data-less rows sink.
+- **The artist sort's default inner order is date-added**, which YouTube does
+  not have, so the most-used sort silently falls through to something other
+  than its label.
+
+**Named debt:**
+
+- ~~`GET /playlists` has never run against a live authenticated account.~~
+  **Cleared 2026-09-24.** Credentials refreshed and the whole read path
+  verified live over HTTP: 3 playlists listed with correct field renaming and
+  a null `count` handled; the 386-track playlist fetched, `readable` 383,
+  normalized 383, zero dropped, `setVideoId` present and unique on every row,
+  `originalIndex` dense. All nine sort strategies produced valid permutations.
+- **The proxy hand-picks the playlist envelope and drops `sortOrder`**, which
+  §5 requires be checked before ordering. 2c will need a proxy change it
+  should not need.
+- **The cached `YTMusic` holds one `requests.Session` shared across FastAPI's
+  threadpool.** Low risk for a single-user local tool, but the original
+  "not reachable with one endpoint" rationale expired when the playlist routes
+  landed.
+
 - **`csv/detectColumns.js` and `csv/match.js` still hardcode Spotify URI
   patterns** (§4 named this). The mirror path does not need them, so it stays
   out of scope — but CSV-driven ordering of a YouTube playlist would.

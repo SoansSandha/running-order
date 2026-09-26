@@ -87,6 +87,10 @@ describe('buildMoveOps', () => {
   test('rejects duplicate keys, which would make positions ambiguous', () => {
     expect(() => buildMoveOps(['a', 'a'], ['a', 'a'])).toThrow(/unique/i)
   })
+
+  test('rejects a null key, which is reserved as the beforeKey end-of-list sentinel', () => {
+    expect(() => buildMoveOps(['a', null], ['a', null])).toThrow(/null/i)
+  })
 })
 
 describe('buildMoveOps — minimality', () => {

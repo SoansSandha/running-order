@@ -75,6 +75,11 @@ export function normalizePlaylistItem(item, index) {
 
     addedAt: item?.added_at ?? null,
     originalIndex: index,
+    // Which service this Track came from, and the identity a write needs.
+    // Spotify reorders by index and has no per-item id; YouTube's setVideoId
+    // goes here. See docs/2026-09-18-youtube-mirror-design.md §6.
+    source: 'spotify',
+    itemId: null,
 
     isLocal: item?.is_local === true,
     isUnavailable,

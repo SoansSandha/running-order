@@ -144,24 +144,58 @@ export function CopyStrip({ value, label = 'Copy' }) {
   )
 }
 
-/** A segmented control, rendered as adjacent flap keys. */
-export function OptionRow({ value, onChange, choices, label }) {
+/**
+ * A segmented control, rendered as adjacent flap keys.
+ *
+ * `disabled` holds the whole row — for a control that is merely busy.
+ *
+ * `reasonFor` is asked about each choice separately. A non-null answer seats
+ * that key unlit and prints why beneath the row. An unavailable choice is
+ * never dropped from the row: the row would then silently offer a different
+ * set on each service, and a control that has gone missing is harder to
+ * understand than one that says what it cannot do.
+ */
+export function OptionRow({
+  value,
+  onChange,
+  choices,
+  label,
+  disabled = false,
+  reasonFor,
+  /* Hide the caption but keep naming the group for screen readers. Used
+     where the choices already say what they are and a caption would make
+     the control taller than the buttons beside it. */
+  labelHidden = false,
+  className = '',
+}) {
+  const keys = choices.map((choice) => ({
+    choice,
+    reason: reasonFor ? (reasonFor(choice.value) ?? null) : null,
+  }))
+  const unavailable = keys.filter((key) => key.reason)
+
   return (
     <div>
-      {label ? <span className="field-label">{label}</span> : null}
-      <div className="option-row" role="group" aria-label={label}>
-        {choices.map((choice) => (
+      {label && !labelHidden ? <span className="field-label">{label}</span> : null}
+      <div className={`option-row ${className}`.trim()} role="group" aria-label={label}>
+        {keys.map(({ choice, reason }) => (
           <button
             key={choice.value}
             type="button"
             className="option"
             aria-pressed={value === choice.value}
+            disabled={disabled || Boolean(reason)}
             onClick={() => onChange(choice.value)}
           >
             {choice.label}
           </button>
         ))}
       </div>
+      {unavailable.map(({ choice, reason }) => (
+        <p className="option-reason" key={choice.value}>
+          {choice.label} — {reason}
+        </p>
+      ))}
     </div>
   )
 }
