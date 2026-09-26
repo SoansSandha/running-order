@@ -19,8 +19,23 @@ import {
   QuietLever,
 } from '../components/chrome.jsx'
 import { UnlitField } from '../components/UnlitField.jsx'
+import { writeUnsupportedReason } from '../../services/capabilities.js'
 
 const SOURCE_LABELS = { spotify: 'Spotify', youtube: 'YouTube Music' }
+
+/**
+ * What can be done to this row, in three states rather than two.
+ *
+ * The adapter for a source with no writer already refuses to claim the row
+ * is editable; labelling it "Clone only" would just swap one promise the
+ * app cannot keep for another, exactly as the system pseudo-playlists are
+ * dropped rather than shown that way. A Spotify row carries no `source`, so
+ * it reads as before.
+ */
+function accessLabel(item) {
+  if (writeUnsupportedReason(item.source)) return 'Read only'
+  return item.editable ? 'Editable' : 'Clone only'
+}
 
 export function PlaylistsScreen({ app, auth }) {
   const { playlists, busy, error, loadPlaylists, openPlaylist, me, source, setSource } = app
@@ -156,7 +171,7 @@ export function PlaylistsScreen({ app, auth }) {
             <span className="cell-stack" role="cell">
               <span className="row-title">{item.name}</span>
               <span className="row-sub row-mobile-sub">
-                {item.editable ? 'Editable' : 'Clone only'} · {formatCount(item.trackCount)}
+                {accessLabel(item)} · {formatCount(item.trackCount)}
               </span>
             </span>
 
@@ -166,7 +181,7 @@ export function PlaylistsScreen({ app, auth }) {
 
             <span className="cell-end" role="cell">
               <span className="row-meta num">{formatCount(item.trackCount)}</span>
-              {item.editable ? null : <Chip tone="amber">Clone only</Chip>}
+              {item.editable ? null : <Chip tone="amber">{accessLabel(item)}</Chip>}
             </span>
           </button>
         ))}

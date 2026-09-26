@@ -50,6 +50,7 @@ export function SortScreen({ app }) {
     toggleSuggestion,
     setScreen,
     targetTracks,
+    writeBlocked,
   } = app
 
   const fileInput = useRef(null)
@@ -65,8 +66,11 @@ export function SortScreen({ app }) {
           { label: 'Tracks', value: formatCount(tracks.length) },
           {
             label: 'Access',
-            value: playlist?.editable ? 'EDITABLE' : 'CLONE ONLY',
-            tone: playlist?.editable ? 'green' : 'amber',
+            // Three states, not two. "CLONE ONLY" on a source with no writer
+            // would promise a clone the app cannot perform, which is the
+            // same lie "EDITABLE" was telling.
+            value: writeBlocked ? 'READ ONLY' : playlist?.editable ? 'EDITABLE' : 'CLONE ONLY',
+            tone: !writeBlocked && playlist?.editable ? 'green' : 'amber',
           },
         ]}
       />

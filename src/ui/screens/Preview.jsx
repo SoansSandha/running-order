@@ -21,6 +21,7 @@ export function PreviewScreen({ app }) {
     applyInPlace,
     applyClone,
     focusKey,
+    writeBlocked,
   } = app
 
   const blocked = previewRows.filter((row) => row.blocked)
@@ -38,6 +39,14 @@ export function PreviewScreen({ app }) {
           { label: 'Time', value: estimateReorder(ops.length) },
         ]}
       />
+
+      {writeBlocked ? (
+        <div style={{ padding: '18px 0 0' }}>
+          <Notice tone="amber" title="Nothing here can be written yet">
+            {writeBlocked}
+          </Notice>
+        </div>
+      ) : null}
 
       {nothingToDo && tracks.length > 0 ? (
         <div style={{ padding: '18px 0 0' }}>
@@ -67,18 +76,32 @@ export function PreviewScreen({ app }) {
         />
       </div>
 
+      {/* Every lever here writes through the Spotify client. On a source
+          with no writer they are all held, and the notice above says why —
+          the levers stay on the board rather than disappearing from it. */}
       <LeverRow>
-        <QuietLever onClick={() => applyInPlace({ dryRun: true })} disabled={nothingToDo}>
+        <QuietLever
+          onClick={() => applyInPlace({ dryRun: true })}
+          disabled={nothingToDo || Boolean(writeBlocked)}
+          title={writeBlocked ?? undefined}
+        >
           Dry run
         </QuietLever>
         <span className="spacer" />
-        <QuietLever onClick={() => applyClone()} disabled={tracks.length === 0}>
+        <QuietLever
+          onClick={() => applyClone()}
+          disabled={tracks.length === 0 || Boolean(writeBlocked)}
+          title={writeBlocked ?? undefined}
+        >
           Clone and sort
         </QuietLever>
         <Lever
           onClick={() => applyInPlace()}
-          disabled={nothingToDo || !playlist?.editable}
-          title={playlist?.editable ? undefined : 'You can only clone a playlist you do not own'}
+          disabled={nothingToDo || !playlist?.editable || Boolean(writeBlocked)}
+          title={
+            writeBlocked ??
+            (playlist?.editable ? undefined : 'You can only clone a playlist you do not own')
+          }
         >
           Apply order
         </Lever>

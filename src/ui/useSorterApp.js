@@ -26,6 +26,7 @@ import {
   defaultStrategyOptionsFor,
   supportedStrategyFor,
   unsupportedOptionReason,
+  writeUnsupportedReason,
 } from '../services/capabilities.js'
 import { createYouTubeClient } from '../services/youtube/client.js'
 import { toAppPlaylists } from '../services/youtube/playlists.js'
@@ -277,9 +278,20 @@ export function useSorterApp(auth, demo = null) {
   const strategyLabel =
     strategyId === CSV_STRATEGY ? 'CSV' : (strategyById(strategyId)?.label ?? strategyId)
 
+  /**
+   * Why nothing on this playlist can be written. Every lever below refuses
+   * on it, and the preview screen prints it beside them — no write path may
+   * assume it was only ever reached from a lit control.
+   */
+  const writeBlocked = writeUnsupportedReason(capabilitySource)
+
   const applyInPlace = useCallback(
     async ({ dryRun = false } = {}) => {
       if (!playlist) return
+      // Both the real run and the dry run read the live snapshot first, and
+      // that read goes to Spotify with whatever id it is handed. A YouTube
+      // id there is a wrong-service request, not a no-op.
+      if (writeBlocked) return
       setError(null)
       setOutcome(null)
       setScreen('progress')
@@ -337,12 +349,16 @@ export function useSorterApp(auth, demo = null) {
         })
       }
     },
-    [client, writer, playlist, tracks, targetTracks, ops, movedKeys],
+    [client, writer, playlist, tracks, targetTracks, ops, movedKeys, writeBlocked],
   )
 
   const applyClone = useCallback(
     async ({ dryRun = false } = {}) => {
       if (!playlist || !me) return
+      // executeClone creates the destination playlist BEFORE it discovers
+      // nothing is cloneable, so one unguarded click left a real empty
+      // playlist in the user's Spotify account.
+      if (writeBlocked) return
       setError(null)
       setOutcome(null)
       setScreen('progress')
@@ -365,7 +381,7 @@ export function useSorterApp(auth, demo = null) {
         setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
       }
     },
-    [writer, playlist, me, targetTracks, strategyLabel],
+    [writer, playlist, me, targetTracks, strategyLabel, writeBlocked],
   )
 
   const cancelRun = useCallback(() => abort.current?.abort(), [])
@@ -399,6 +415,9 @@ export function useSorterApp(auth, demo = null) {
 
   const undoLast = useCallback(async () => {
     if (!playlist) return
+    // Unreachable while no write can happen in the first place, but undo is
+    // a write path to the same Spotify client and is gated with the rest.
+    if (writeBlocked) return
     const snapshot = loadSnapshot(playlist.id)
     if (!snapshot) {
       setError('There is no saved snapshot for this playlist.')
@@ -427,13 +446,14 @@ export function useSorterApp(auth, demo = null) {
       setRun(null)
       setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
     }
-  }, [client, writer, playlist])
+  }, [client, writer, playlist, writeBlocked])
 
   return {
     screen,
     setScreen,
     source,
     capabilitySource,
+    writeBlocked,
     setSource: changeSource,
     me,
     playlists,

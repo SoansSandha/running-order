@@ -67,6 +67,30 @@ const FALLBACK_OPTION_VALUES = {
 }
 
 /**
+ * Why a source cannot be written to at all.
+ *
+ * There is no YouTube writer yet, and every write path in the app is wired
+ * to the Spotify client — so firing one at a YouTube playlist does not fail
+ * politely. Apply and dry run send a YouTube id to Spotify's API; clone
+ * creates a real, empty playlist in the user's Spotify account before it
+ * ever discovers that no YouTube track carries a URI to put in it.
+ *
+ * Stated here, next to the sort gaps, so no screen has to infer it from a
+ * playlist's `editable` flag.
+ */
+const UNWRITABLE_SOURCES = {
+  youtube:
+    'Writing to YouTube Music arrives with a later deliverable. This build can read, sort and preview a YouTube playlist, but not change one.',
+}
+
+/**
+ * @returns {string|null} why nothing can be written to this source, or null
+ */
+export function writeUnsupportedReason(source) {
+  return UNWRITABLE_SOURCES[source] ?? null
+}
+
+/**
  * @returns {string|null} why this strategy is unavailable, or null if it works
  */
 export function unsupportedReason(source, strategyId) {

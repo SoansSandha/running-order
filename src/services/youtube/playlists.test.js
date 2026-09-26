@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { writeUnsupportedReason } from '../capabilities.js'
 import { toAppPlaylists } from './playlists.js'
 
 const RAW = [
@@ -13,8 +14,24 @@ describe('toAppPlaylists', () => {
     expect(pl.id).toBe('PL123')
     expect(pl.name).toBe('punjabi songs')
     expect(pl.trackCount).toBe(386)
-    expect(pl.editable).toBe(true)
     expect(pl.source).toBe('youtube')
+  })
+
+  // editable: true lit "Apply order" and painted "Access: EDITABLE" on the
+  // sort screen. Both aimed the Spotify write path at a YouTube id, and the
+  // clone path created a real empty Spotify playlist before discovering
+  // that no YouTube track carries a URI. There is no YouTube writer, so the
+  // honest answer is false — see capabilities.writeUnsupportedReason, which
+  // is what actually gates the levers and supplies the reason.
+  test('claims no write access, because there is no YouTube writer', () => {
+    expect(toAppPlaylists([RAW[1]])[0].editable).toBe(false)
+    expect(writeUnsupportedReason(toAppPlaylists([RAW[1]])[0].source)).toMatch(/later deliverable/)
+  })
+
+  test('says so for every playlist it returns, not just the first', () => {
+    const all = toAppPlaylists([RAW[1], { id: 'PL9', title: 'x', count: 2 }])
+    expect(all).toHaveLength(2)
+    for (const pl of all) expect(pl.editable).toBe(false)
   })
 
   test('carries an owner so the UI does not read undefined', () => {

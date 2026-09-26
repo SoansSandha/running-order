@@ -8,6 +8,7 @@ import {
   supportedStrategyFor,
   unsupportedOptionReason,
   unsupportedReason,
+  writeUnsupportedReason,
 } from './capabilities.js'
 
 /** Every (source, strategy, option, choice) the registry and table describe. */
@@ -269,5 +270,35 @@ describe('defaultStrategyOptionsFor, generalised beyond innerOrder', () => {
       expect(values).toContain(out[option.id])
       expect(unsupportedOptionReason(source, strategy.id, option.id, out[option.id])).toBeNull()
     }
+  })
+})
+
+describe('writeUnsupportedReason', () => {
+  test('Spotify can be written to', () => {
+    expect(writeUnsupportedReason('spotify')).toBeNull()
+  })
+
+  // Apply, dry run, clone and undo all go through the Spotify client. On a
+  // source with no writer they do not fail politely: two send a YouTube id
+  // to Spotify's API and clone creates a real empty playlist in the user's
+  // Spotify account before it finds nothing to put in it.
+  test('YouTube cannot, and says when it will be able to', () => {
+    const reason = writeUnsupportedReason('youtube')
+    expect(reason).toMatch(/YouTube Music/)
+    expect(reason).toMatch(/later deliverable/)
+  })
+
+  // A Spotify playlist carries no `source` field at all, so the value this
+  // is asked about is routinely undefined. It must not read as unwritable.
+  test('an absent or unknown source is writable', () => {
+    expect(writeUnsupportedReason(undefined)).toBeNull()
+    expect(writeUnsupportedReason(null)).toBeNull()
+    expect(writeUnsupportedReason('something-else')).toBeNull()
+  })
+
+  test('is a separate question from whether a sort can be honoured', () => {
+    // YouTube can run the artist sort and still not be written to.
+    expect(unsupportedReason('youtube', 'artist')).toBeNull()
+    expect(writeUnsupportedReason('youtube')).not.toBeNull()
   })
 })

@@ -52,7 +52,13 @@ export function toAppPlaylists(rawPlaylists) {
       // No snapshot id exists; the pre-write guard re-fetches and compares
       // contents instead. See spec §11.
       snapshotId: null,
-      editable: true,
+      // There is no YouTube writer, so nothing here can be reordered in
+      // place OR cloned. Claiming otherwise lit "Apply order" and painted
+      // "Access: EDITABLE", both of which aimed Spotify writes at a YouTube
+      // id. capabilities.writeUnsupportedReason is what gates the levers and
+      // supplies the reason; this flag stays honest so no screen reading it
+      // on its own is misled either.
+      editable: false,
       source: 'youtube',
     }))
 }
