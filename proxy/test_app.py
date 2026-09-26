@@ -52,9 +52,38 @@ def test_lists_playlists(client, monkeypatch):
     monkeypatch.setattr(proxy, "get_client", lambda: fake)
     body = client.get("/playlists").json()
     assert body == {"playlists": [
-        {"id": "PL1", "title": "punjabi songs", "count": 382},
-        {"id": "LM", "title": "Liked Music", "count": None},
+        {"id": "PL1", "title": "punjabi songs", "count": 382, "description": None, "thumbnails": []},
+        {"id": "LM", "title": "Liked Music", "count": None, "description": None, "thumbnails": []},
     ]}
+
+
+def test_playlist_thumbnails_pass_through_unchanged(client, monkeypatch):
+    # D13: the proxy reshapes nothing, and does not pick a thumbnail —
+    # choosing one is a decision, and decisions live in JS.
+    thumbnails = [
+        {"url": "https://example.com/small.jpg", "width": 60, "height": 60},
+        {"url": "https://example.com/large.jpg", "width": 226, "height": 226},
+    ]
+    fake = FakeYT(playlists=[
+        {
+            "playlistId": "PL1",
+            "title": "punjabi songs",
+            "count": 382,
+            "description": "road trip",
+            "thumbnails": thumbnails,
+        },
+    ])
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    body = client.get("/playlists").json()
+    assert body["playlists"] == [
+        {
+            "id": "PL1",
+            "title": "punjabi songs",
+            "count": 382,
+            "description": "road trip",
+            "thumbnails": thumbnails,
+        },
+    ]
 
 
 def test_playlist_always_requests_every_track(client, monkeypatch):

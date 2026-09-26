@@ -64,4 +64,13 @@ describe('defaultStrategyOptionsFor', () => {
     expect(defaultStrategyOptionsFor('youtube', 'title', { direction: 'desc' }))
       .toEqual({ direction: 'desc' })
   })
+
+  // The 'title' strategy owns no `innerOrder` option. Passing baseOptions
+  // that happen to hold an `innerOrder` key with an unsupported value proves
+  // the replacement is keyed off which strategy owns the option, not off
+  // whatever key shows up in baseOptions.
+  test('leaves a stray innerOrder key untouched on a strategy that does not own it', () => {
+    const out = defaultStrategyOptionsFor('youtube', 'title', { innerOrder: 'addedAt' })
+    expect(out.innerOrder).toBe('addedAt')
+  })
 })

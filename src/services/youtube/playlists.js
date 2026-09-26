@@ -14,7 +14,24 @@
 const SYSTEM_PLAYLIST_IDS = new Set(['LM', 'SE'])
 
 /**
- * @param {Array<{id: string, title: string, count: number|null}>} rawPlaylists
+ * The URL of the largest thumbnail by width, or null when there are none.
+ *
+ * ytmusicapi lists thumbnails smallest-first, but that ordering is not
+ * contracted, so the widest is picked explicitly rather than assumed to be
+ * last. Largest because the row art should not be upscaled from a small one.
+ *
+ * @param {Array<{url: string, width: number, height: number}>|undefined} thumbnails
+ * @returns {string|null}
+ */
+function largestThumbnailUrl(thumbnails) {
+  if (!thumbnails || thumbnails.length === 0) return null
+  return thumbnails.reduce((largest, current) =>
+    current.width > largest.width ? current : largest,
+  ).url
+}
+
+/**
+ * @param {Array<{id: string, title: string, count: number|null, description?: string|null, thumbnails?: Array}>} rawPlaylists
  * @returns {Array<object>} playlists in the app's shared shape
  */
 export function toAppPlaylists(rawPlaylists) {
@@ -23,6 +40,10 @@ export function toAppPlaylists(rawPlaylists) {
     .map((raw) => ({
       id: raw.id,
       name: raw.title ?? '',
+      // Matches Spotify's adapter (src/services/spotify/playlists.js), which
+      // also falls back to '' for a missing description.
+      description: raw.description ?? '',
+      imageUrl: largestThumbnailUrl(raw.thumbnails),
       trackCount: raw.count ?? 0,
       // The screen reads owner.displayName unguarded. YouTube's listing names
       // no owner, and everything it returns is the signed-in user's own.

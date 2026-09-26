@@ -41,4 +41,40 @@ describe('toAppPlaylists', () => {
   test('returns an empty array for no input', () => {
     expect(toAppPlaylists(null)).toEqual([])
   })
+
+  test('picks the widest of several thumbnails, regardless of order', () => {
+    const [pl] = toAppPlaylists([
+      {
+        id: 'PL9',
+        title: 'x',
+        count: 1,
+        thumbnails: [
+          { url: 'small.jpg', width: 60, height: 60 },
+          { url: 'large.jpg', width: 226, height: 226 },
+          { url: 'medium.jpg', width: 120, height: 120 },
+        ],
+      },
+    ])
+    expect(pl.imageUrl).toBe('large.jpg')
+  })
+
+  test('yields null imageUrl for an empty thumbnails list', () => {
+    const [pl] = toAppPlaylists([{ id: 'PL9', title: 'x', count: 1, thumbnails: [] }])
+    expect(pl.imageUrl).toBeNull()
+  })
+
+  test('yields null imageUrl when the thumbnails key is missing entirely', () => {
+    const [pl] = toAppPlaylists([{ id: 'PL9', title: 'x', count: 1 }])
+    expect(pl.imageUrl).toBeNull()
+  })
+
+  test('carries the description when present', () => {
+    const [pl] = toAppPlaylists([{ id: 'PL9', title: 'x', count: 1, description: 'road trip' }])
+    expect(pl.description).toBe('road trip')
+  })
+
+  test("defaults description to '' when absent, matching Spotify's adapter", () => {
+    const [pl] = toAppPlaylists([{ id: 'PL9', title: 'x', count: 1 }])
+    expect(pl.description).toBe('')
+  })
 })

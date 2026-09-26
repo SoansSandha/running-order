@@ -89,7 +89,13 @@ def list_playlists() -> dict:
         raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
     return {
         "playlists": [
-            {"id": p.get("playlistId"), "title": p.get("title"), "count": p.get("count")}
+            {
+                "id": p.get("playlistId"),
+                "title": p.get("title"),
+                "count": p.get("count"),
+                "description": p.get("description"),
+                "thumbnails": p.get("thumbnails") or [],
+            }
             for p in raw
         ]
     }

@@ -9,6 +9,8 @@
  * Pure module: a table and two lookups.
  */
 
+import { STRATEGIES } from '../sort/index.js'
+
 const YOUTUBE_MISSING = 'YouTube Music does not provide this'
 
 export const UNSUPPORTED_BY_SOURCE = {
@@ -28,6 +30,19 @@ const UNSUPPORTED_INNER_ORDERS = {
 const FALLBACK_INNER_ORDER = 'title'
 
 /**
+ * Strategy ids that own an `innerOrder` option, derived from the strategy
+ * registry rather than hardcoded — so a second strategy that grows its own
+ * `innerOrder` option is picked up here automatically, and one that merely
+ * has an option that happens to be named `innerOrder`'s neighbour is not
+ * mistaken for it.
+ */
+const STRATEGIES_WITH_INNER_ORDER = new Set(
+  STRATEGIES.filter((strategy) => strategy.options.some((option) => option.id === 'innerOrder')).map(
+    (strategy) => strategy.id,
+  ),
+)
+
+/**
  * @returns {string|null} why this strategy is unavailable, or null if it works
  */
 export function unsupportedReason(source, strategyId) {
@@ -39,11 +54,16 @@ export function unsupportedReason(source, strategyId) {
  *
  * The artist sort defaults to ordering by date added, which YouTube lacks —
  * left alone, the most-used sort would silently do something other than its
- * label says.
+ * label says. Only strategies that actually own an `innerOrder` option are
+ * touched, so a strategy whose unrelated option happens to hold the same
+ * value as an unsupported inner order is left alone.
  */
 export function defaultStrategyOptionsFor(source, strategyId, baseOptions) {
   const options = { ...baseOptions }
-  if (UNSUPPORTED_INNER_ORDERS[source]?.has(options.innerOrder)) {
+  if (
+    STRATEGIES_WITH_INNER_ORDER.has(strategyId) &&
+    UNSUPPORTED_INNER_ORDERS[source]?.has(options.innerOrder)
+  ) {
     options.innerOrder = FALLBACK_INNER_ORDER
   }
   return options
