@@ -125,7 +125,10 @@
 }
 
 .board-playlists {
-  --cols: 64px minmax(0, 1fr) 14ch 11ch;
+  /* Access gets its own track. Sharing Tracks' width meant a "CLONE ONLY"
+     chip plus the count needed ~125px in an 11ch column, and because the
+     cell is justify-content: flex-end the excess spilled LEFT, over Owner. */
+  --cols: 64px minmax(0, 1fr) 14ch 7ch 13ch;
   --row-h: 58px;
 }
 
@@ -727,6 +730,15 @@
   max-width: 100%;
 }
 
+/* Sized to stand in a row of levers rather than in an options panel: the
+   panel's smaller option would otherwise read as a different kind of thing.
+   Mirrors .lever-quiet's padding, font size and tracking exactly. */
+.option-row-inline .option {
+  font-size: var(--fs-control);
+  letter-spacing: 0.14em;
+  padding: 11px 20px;
+}
+
 .option {
   font-family: var(--cond);
   font-size: var(--fs-label);
@@ -834,8 +846,10 @@
 
   .col-artist,
   .col-added,
+  .col-access,
   .row-artist,
-  .row-added {
+  .row-added,
+  .pl-access {
     display: none;
   }
 

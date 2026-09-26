@@ -155,7 +155,19 @@ export function CopyStrip({ value, label = 'Copy' }) {
  * set on each service, and a control that has gone missing is harder to
  * understand than one that says what it cannot do.
  */
-export function OptionRow({ value, onChange, choices, label, disabled = false, reasonFor }) {
+export function OptionRow({
+  value,
+  onChange,
+  choices,
+  label,
+  disabled = false,
+  reasonFor,
+  /* Hide the caption but keep naming the group for screen readers. Used
+     where the choices already say what they are and a caption would make
+     the control taller than the buttons beside it. */
+  labelHidden = false,
+  className = '',
+}) {
   const keys = choices.map((choice) => ({
     choice,
     reason: reasonFor ? (reasonFor(choice.value) ?? null) : null,
@@ -164,8 +176,8 @@ export function OptionRow({ value, onChange, choices, label, disabled = false, r
 
   return (
     <div>
-      {label ? <span className="field-label">{label}</span> : null}
-      <div className="option-row" role="group" aria-label={label}>
+      {label && !labelHidden ? <span className="field-label">{label}</span> : null}
+      <div className={`option-row ${className}`.trim()} role="group" aria-label={label}>
         {keys.map(({ choice, reason }) => (
           <button
             key={choice.value}

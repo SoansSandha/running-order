@@ -158,12 +158,27 @@ DESIGN.md records these as build gaps rather than system rules.
 
 ---
 
-## YouTube Music: in progress
+## YouTube Music: deliverable 2a complete
 
 Branch `youtube-mirror-2a`. Design: [2026-09-18-youtube-mirror-design.md](2026-09-18-youtube-mirror-design.md).
-Plan: [2026-09-22-youtube-read-path.md](superpowers/plans/2026-09-22-youtube-read-path.md).
+Plans: [read path](superpowers/plans/2026-09-22-youtube-read-path.md) ·
+[in the UI](superpowers/plans/2026-09-24-youtube-in-the-ui.md).
 
-All six tasks are done. Everything below is committed, reviewed and green.
+**Confirmed working against a real account on 2026-09-26**, by hand, in a
+browser — not inferred from tests:
+
+| Verified | Result |
+|---|---|
+| YouTube playlists listed, with cover art | Two playlists, correct counts. One created *after* connecting appeared on reload, so the listing is live rather than cached |
+| Opening one | 387 counted, 383 readable, 383 normalized |
+| Strategy gating | Release date, Date added and Popularity disabled, each showing why |
+| **Option-value gating** | Artist → *Date added* and *Album release date* disabled; Album → *Release date* disabled with *Album name A to Z* selected instead |
+| Switching source off a disabled strategy | Falls back to a supported one rather than staying selected-and-disabled |
+| Writes blocked | Apply, Clone, Dry run and Undo all refuse a YouTube playlist, with the reason on hover. Access reads **Read only** |
+| Spotify unaffected | A real artist sort applied successfully to a Spotify playlist |
+
+Both plans' tasks are done, reviewed, and green: **372 JavaScript tests, 13
+Python tests**.
 
 | Task | State |
 |---|---|
@@ -173,6 +188,28 @@ All six tasks are done. Everything below is committed, reviewed and green.
 | 4 — Proxy playlist endpoints | **Done.** `GET /playlists` and `GET /playlists/{id}`; both now return a clean `HTTPException(502)` on failure instead of an unhandled traceback, and `POST /auth/status` makes one authenticated call to detect a session YouTube killed server-side |
 | 5 — JS client for the proxy | **Done.** `src/services/youtube/client.js` — a plain fetch wrapper; `ProxyUnavailableError` points at the `uvicorn` command that actually starts the proxy |
 | 6 — YouTube → Track normalizer | **Done.** `src/services/youtube/track.js` — maps onto the shared Track shape, numbers accepted rows densely, and drops rows with no `setVideoId` |
+
+### The UI plan, and what its final review caught
+
+[2026-09-24-youtube-in-the-ui.md](superpowers/plans/2026-09-24-youtube-in-the-ui.md)
+added the source toggle, the capability table, and the write guards. Its final
+review blocked the merge on two Critical defects that the four per-task
+reviews could not see, because each existed only *between* two commits:
+
+- **Switching source never loaded the new library.** The toggle sits on the
+  playlists screen, so the screen never unmounted and its one-shot fetch guard
+  stayed set. The user would have seen "returned no playlists for this
+  account" — a false statement, as the feature's first words.
+- **Spotify write levers stayed live on a YouTube playlist.** "Clone and sort"
+  had no guard at all, and would have created a real empty playlist in the
+  user's Spotify account. `Preview.jsx` was in no task's diff, so no per-task
+  reviewer ever opened it. Fixing it turned up two further write paths nobody
+  had listed: the dry run shared a Spotify snapshot read, and undo.
+
+The plan had named a manual browser walkthrough as the only gate for the UI
+layer, since this repo has no component-test infrastructure. That walkthrough
+was skipped, and the first Critical was step 2 of its own script. **Where a
+plan names a manual gate, run it before calling the work reviewable.**
 
 ### What the live spike established
 

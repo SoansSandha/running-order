@@ -85,7 +85,11 @@ export function PlaylistsScreen({ app, auth }) {
         style={{
           display: 'flex',
           gap: 12,
-          alignItems: 'center',
+          // Bottom edges, not centres: the filter field, the source toggle
+          // and the levers have three different heights, so centring leaves
+          // each sitting at its own level. Aligning the bottoms lands them
+          // on one line however tall each happens to be.
+          alignItems: 'flex-end',
           flexWrap: 'wrap',
           padding: '18px 0',
         }}
@@ -101,6 +105,8 @@ export function PlaylistsScreen({ app, auth }) {
         <div style={{ flex: 1 }} />
         <OptionRow
           label="Source"
+          labelHidden
+          className="option-row-inline"
           value={source}
           onChange={setSource}
           // Switching mid-read lets an in-flight library land on top of the
@@ -141,6 +147,7 @@ export function PlaylistsScreen({ app, auth }) {
         <span className="col-label">Playlist</span>
         <span className="col-label col-artist">Owner</span>
         <span className="col-label">Tracks</span>
+        <span className="col-label col-access">Access</span>
       </div>
 
       <div className="board-scroll" role="table" aria-label="Your playlists">
@@ -181,6 +188,9 @@ export function PlaylistsScreen({ app, auth }) {
 
             <span className="cell-end" role="cell">
               <span className="row-meta num">{formatCount(item.trackCount)}</span>
+            </span>
+
+            <span className="cell-end pl-access" role="cell">
               {item.editable ? null : <Chip tone="amber">{accessLabel(item)}</Chip>}
             </span>
           </button>
