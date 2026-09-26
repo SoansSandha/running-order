@@ -25,13 +25,26 @@ const SOURCE_LABELS = { spotify: 'Spotify', youtube: 'YouTube Music' }
 export function PlaylistsScreen({ app, auth }) {
   const { playlists, busy, error, loadPlaylists, openPlaylist, me, source, setSource } = app
   const [filter, setFilter] = useState('')
-  const requested = useRef(false)
+
+  /**
+   * Which source the library on the board was fetched for.
+   *
+   * A plain "already requested" boolean cannot work here: the source toggle
+   * lives on this screen, and changing the source only re-asserts the screen
+   * it is already on, so this component never unmounts and the ref never
+   * resets. The effect does re-fire — `loadPlaylists` is rebuilt whenever the
+   * source changes — but a boolean guard swallows it, leaving an empty board
+   * claiming the new service returned nothing. Keyed on the source, the guard
+   * re-arms for a service it has not read yet and still refuses the duplicate
+   * fetch it was put here for.
+   */
+  const requestedFor = useRef(null)
 
   useEffect(() => {
-    if (requested.current) return
-    requested.current = true
+    if (requestedFor.current === source) return
+    requestedFor.current = source
     loadPlaylists()
-  }, [loadPlaylists])
+  }, [loadPlaylists, source])
 
   const needle = filter.trim().toLowerCase()
   const shown = needle
