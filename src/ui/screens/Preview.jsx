@@ -60,9 +60,9 @@ export function PreviewScreen({ app }) {
       {blocked.length > 0 ? (
         <div style={{ padding: '18px 0 0' }}>
           <Notice tone="red" title={`${blocked.length} cannot be copied`}>
-            Local files and tracks Spotify no longer serves can be reordered in
-            place, but have no URI to add to a new playlist. A clone would come
-            back {formatCount(blocked.length)} short.
+            Local files, and tracks the service no longer serves, can be
+            reordered in place but have no URI to add to a new playlist. A
+            clone would come back {formatCount(blocked.length)} short.
           </Notice>
         </div>
       ) : null}

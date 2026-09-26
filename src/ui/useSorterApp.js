@@ -308,7 +308,7 @@ export function useSorterApp(auth, demo = null) {
           setRun(null)
           setOutcome({
             kind: 'stale',
-            message: `${playlist.name} changed on Spotify since it was read. Reload it and preview again.`,
+            message: `${playlist.name} changed since it was read. Reload it and preview again.`,
           })
           return
         }
