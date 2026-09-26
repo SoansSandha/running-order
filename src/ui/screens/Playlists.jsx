@@ -8,11 +8,22 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { formatCount } from '../format.js'
-import { BoardEmpty, Chip, Frame, Head, Meter, Notice, QuietLever } from '../components/chrome.jsx'
+import {
+  BoardEmpty,
+  Chip,
+  Frame,
+  Head,
+  Meter,
+  Notice,
+  OptionRow,
+  QuietLever,
+} from '../components/chrome.jsx'
 import { UnlitField } from '../components/UnlitField.jsx'
 
+const SOURCE_LABELS = { spotify: 'Spotify', youtube: 'YouTube Music' }
+
 export function PlaylistsScreen({ app, auth }) {
-  const { playlists, busy, error, loadPlaylists, openPlaylist, me } = app
+  const { playlists, busy, error, loadPlaylists, openPlaylist, me, source, setSource } = app
   const [filter, setFilter] = useState('')
   const requested = useRef(false)
 
@@ -28,11 +39,14 @@ export function PlaylistsScreen({ app, auth }) {
     : playlists
 
   const editable = playlists.filter((item) => item.editable).length
+  const sourceLabel = SOURCE_LABELS[source] ?? source
+  const title =
+    source === 'youtube' ? `${sourceLabel} Library` : me ? `${me.displayName}'s Library` : 'Library'
 
   return (
     <Frame fill>
       <Head
-        title={me ? `${me.displayName}'s Library` : 'Library'}
+        title={title}
         tally={[
           { label: 'Playlists', value: formatCount(playlists.length) },
           { label: 'Editable', value: formatCount(editable), tone: 'green' },
@@ -57,6 +71,15 @@ export function PlaylistsScreen({ app, auth }) {
           aria-label="Filter playlists by name"
         />
         <div style={{ flex: 1 }} />
+        <OptionRow
+          label="Source"
+          value={source}
+          onChange={setSource}
+          choices={[
+            { value: 'spotify', label: 'Spotify' },
+            { value: 'youtube', label: 'YouTube Music' },
+          ]}
+        />
         <QuietLever onClick={() => loadPlaylists()} disabled={Boolean(busy)}>
           Reload
         </QuietLever>
@@ -93,7 +116,7 @@ export function PlaylistsScreen({ app, auth }) {
           <BoardEmpty title={playlists.length ? 'Nothing matches' : 'No playlists yet'}>
             {playlists.length
               ? 'No playlist on the board has that in its name.'
-              : 'Spotify returned no playlists for this account.'}
+              : `${sourceLabel} returned no playlists for this account.`}
           </BoardEmpty>
         ) : null}
 

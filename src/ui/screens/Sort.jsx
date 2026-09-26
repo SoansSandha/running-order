@@ -9,6 +9,7 @@
 
 import { useRef } from 'react'
 import { STRATEGIES } from '../../sort/index.js'
+import { unsupportedReason } from '../../services/capabilities.js'
 import { artistsOf, formatCount, titleOf } from '../format.js'
 import { CSV_STRATEGY } from '../useSorterApp.js'
 import {
@@ -32,6 +33,7 @@ const CSV_FIELDS = [
 
 export function SortScreen({ app }) {
   const {
+    source,
     playlist,
     tracks,
     busy,
@@ -91,18 +93,23 @@ export function SortScreen({ app }) {
           <p className="col-label" style={{ marginBottom: 10 }}>
             Order by
           </p>
-          {STRATEGIES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="strategy"
-              aria-pressed={strategyId === item.id}
-              onClick={() => chooseStrategy(item.id)}
-            >
-              <span className="strategy-name">{item.label}</span>
-              <span className="strategy-note">{item.description}</span>
-            </button>
-          ))}
+          {STRATEGIES.map((item) => {
+            const reason = unsupportedReason(source, item.id)
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className="strategy"
+                aria-pressed={strategyId === item.id}
+                disabled={Boolean(reason)}
+                onClick={() => chooseStrategy(item.id)}
+              >
+                <span className="strategy-name">{item.label}</span>
+                <span className="strategy-note">{item.description}</span>
+                {reason ? <span className="strategy-reason">{reason}</span> : null}
+              </button>
+            )
+          })}
           <button
             type="button"
             className="strategy"

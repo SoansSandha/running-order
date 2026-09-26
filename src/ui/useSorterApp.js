@@ -344,12 +344,13 @@ export function useSorterApp(auth, demo = null) {
 
   const changeSource = useCallback((next) => {
     setSource(next)
+    setOptions(defaultStrategyOptionsFor(next, strategyId, options))
     setPlaylists([])
     setPlaylist(null)
     setTracks([])
     setError(null)
     setScreen('playlists')
-  }, [])
+  }, [strategyId, options])
 
   const undoLast = useCallback(async () => {
     if (!playlist) return

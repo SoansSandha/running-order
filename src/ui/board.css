@@ -659,7 +659,8 @@
 }
 
 .strategy-name,
-.strategy-note {
+.strategy-note,
+.strategy-reason {
   display: block;
   position: relative;
   z-index: 1;
@@ -695,6 +696,23 @@
 .strategy-note {
   font-size: var(--fs-sub);
   color: var(--flap-dim);
+  margin-top: 2px;
+}
+
+/* Disabled reads as an unlit flap, matching .lever:disabled — the row stays
+   seated but its characters dim, and the reason takes the note's place so
+   the control never goes quiet about why it cannot be chosen. */
+.strategy:disabled {
+  cursor: not-allowed;
+}
+
+.strategy:disabled .strategy-name {
+  color: var(--flap-faint);
+}
+
+.strategy-reason {
+  font-size: var(--fs-sub);
+  color: var(--amber);
   margin-top: 2px;
 }
 
