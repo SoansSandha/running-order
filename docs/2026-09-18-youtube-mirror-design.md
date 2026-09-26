@@ -642,6 +642,36 @@ but named work the next plan must own. Recorded here, not in a scratch ledger.
   unambiguous signal. The 2b UI must check it rather than rendering "empty
   playlist".
 
+### Carried forward from the UI branch (2026-09-25)
+
+The source toggle, the capability gating and the write-lever guards shipped.
+Its final review blocked the merge on two Criticals — a source switch that
+never loaded the new library, and Spotify write levers left live on a YouTube
+playlist where "Clone and sort" would have created a real empty playlist in
+the user's Spotify account. Both fixed. These four were deferred deliberately:
+
+- **The two track counts are shown without explanation.** The playlists board
+  shows `trackCount` (386) and the sort screen shows what loaded (383). §6
+  requires the difference be stated; 2a has no writes so the letter of "before
+  any write" is not breached, but two unexplained numbers on consecutive
+  screens is exactly what this codebase otherwise refuses to do.
+- **`readable` is fetched and discarded.** §14 names `readable > 0 && accepted
+  === 0` the unambiguous stale-session signal and assigns it to the 2b UI —
+  but this branch is the first UI to render the path, so a stale session now
+  shows a silent empty board with no error at all.
+- **The CSV strategy sits outside the capability table.** It is not a
+  `STRATEGIES` entry, so `unsupportedReason` never sees it, and it stays
+  enabled on YouTube. It degrades rather than breaks, but its URI and ISRC
+  column pickers can never match a YouTube track.
+- **`isUnavailable` — the decision is hereby recorded as taken, not
+  inherited.** §14 asked for it to be decided "when the UI lands, not by
+  inheritance". The UI has landed and the decision is: **defer the change, do
+  not pretend it is not a defect.** Changing what `sort/` treats as unsortable
+  means editing proven Spotify code, and the right shape is clearer once a
+  YouTube *write* exists to make the misplacement permanent. The live cost is
+  measured and accepted for now: 5 tracks with full title, artist and duration
+  sink to the bottom of every sort.
+
 **Known degradations, to surface with D20's capability gating:**
 
 - **The album sort puts album-less rows in one nameless block at the *top*.**
