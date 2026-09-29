@@ -192,3 +192,11 @@ describe('normalizePlaylistItem — source and item id', () => {
     expect(track.itemId).toBeNull()
   })
 })
+
+describe('normalizePlaylistItem — videoType', () => {
+  test('Spotify tracks carry a null videoType', () => {
+    // The key exists on both sides so the matcher never reads undefined.
+    const [track] = makeTracks([{ name: 'a' }])
+    expect(track.videoType).toBeNull()
+  })
+})
