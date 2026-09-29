@@ -325,7 +325,8 @@ const VARIANT_TAIL =
   /\b(live|remix|version|acoustic|unplugged|slowed|reverb|cover|instrumental|duet|mix|edit|reprise|demo)\b/i
 
 /** Where YouTube starts appending credits, tags and release years. */
-const TAIL_START = /\s[|(\[]|\s[-–—:]\s/
+// `[` needs no escape inside a character class, and oxlint flags one.
+const TAIL_START = /\s[|([]|\s[-–—:]\s/
 
 /**
  * The part of a YouTube title before its trailing credits, or null when there
