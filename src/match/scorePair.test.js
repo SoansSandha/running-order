@@ -246,13 +246,30 @@ describe('scorePair', () => {
     expect(scorePair(spotify, youtube).tier).toBe('strong')
   })
 
-  // I-2: artist names must fold with sortKey, the way csv/match.js folds
-  // them, not with matchText (the title folder). The two disagree on a
-  // leading article, and the disagreement dropped the pair entirely.
+  // I-2: artist names fold with sortKey LAYERED OVER matchText. Each helper
+  // alone drops one of these two tests, so the pair of them pins both halves
+  // of the composition. See foldArtist in scorePair.js.
+  test('an artist differing only by punctuation still matches', () => {
+    // The sortKey half alone fails this: sortKey does not fold punctuation,
+    // so 'jay-z' !== 'jay z' and the pair is dropped outright. Spotify and
+    // YouTube genuinely spell this artist differently.
+    const spotify = track({
+      name: 'Public Service Announcement',
+      artists: [{ id: 'j1', name: 'Jay-Z' }],
+      primaryArtist: { id: 'j1', name: 'Jay-Z' },
+    })
+    const youtube = track({
+      name: 'Public Service Announcement',
+      artists: [{ id: 'j2', name: 'JAY Z' }],
+      primaryArtist: { id: 'j2', name: 'JAY Z' },
+    })
+    expect(scorePair(spotify, youtube).tier).toBe('strong')
+  })
+
   test('an artist differing only by a leading article still matches', () => {
-    // matchText('The PropheC') = 'the prophec'; sortKey('The PropheC') =
-    // 'prophec'. csv/match.js calls these the same artist, so this module
-    // must too, or a later deliverable adds the track a second time.
+    // The matchText half alone fails this: matchText keeps the article, so
+    // 'the prophec' !== 'prophec'. csv/match.js calls these the same artist,
+    // so this module must too, or a later deliverable adds the track twice.
     const spotify = track({
       name: 'Kadi Na Kharaab',
       artists: [{ id: 'p1', name: 'The PropheC' }],

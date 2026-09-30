@@ -122,6 +122,31 @@ function tailNamesVariant(title) {
 }
 
 /**
+ * Fold an ARTIST name for comparison. Titles do NOT use this — they fold with
+ * matchText alone.
+ *
+ * Both halves are load-bearing, and each one fixes a case the other breaks.
+ * matchText folds punctuation but keeps a leading article; sortKey strips a
+ * leading article but keeps punctuation. Artists need both, because the two
+ * services genuinely spell the same artist differently in both ways:
+ *
+ *   pair                           matchText  sortKey  composed
+ *   The PropheC / PropheC            false      true     true
+ *   The Weeknd / Weeknd              false      true     true
+ *   Jay-Z / JAY Z                    true       false    true
+ *   Guns N' Roses / Guns N Roses     true       false    true
+ *   AC/DC / AC DC                    true       false    true
+ *   Sum 41 / Sum-41                  true       false    true
+ *
+ * Do NOT "simplify" this to either helper on its own — each single folder
+ * silently drops one of those two columns, and a dropped artist agreement is
+ * not a demotion here, it is the pair vanishing entirely.
+ */
+function foldArtist(name) {
+  return sortKey(matchText(name))
+}
+
+/**
  * The part of a YouTube title before its trailing credits, or null when there
  * is no tail or the tail's first segment names a variant.
  *
@@ -150,8 +175,8 @@ export function leadingSegment(title, primaryArtistName) {
 
   const lead = text.slice(0, cut).trim()
   if (!lead) return null
-  const leadKey = sortKey(lead)
-  if (leadKey !== '' && leadKey === sortKey(primaryArtistName)) return null
+  const leadKey = foldArtist(lead)
+  if (leadKey !== '' && leadKey === foldArtist(primaryArtistName)) return null
   return lead
 }
 
@@ -168,16 +193,15 @@ export function videoTypeRank(track) {
 }
 
 /**
- * I-2: artist names fold with sortKey, the same helper csv/match.js keys its
- * artist pools with — NOT with matchText, which is the TITLE folder. The two
- * disagree on a leading article (matchText('The PropheC') = 'the prophec',
- * sortKey('The PropheC') = 'prophec'), and forking here meant this module
- * dropped a pair outright that csv/match.js calls the same artist. Titles
- * keep using matchText.
+ * I-2: artist names fold with foldArtist, which layers sortKey — the helper
+ * csv/match.js keys its artist pools with — over matchText. Folding with
+ * matchText alone (the TITLE folder) is what made this module drop a pair
+ * outright that csv/match.js calls the same artist. See foldArtist for why
+ * neither helper is sufficient by itself. Titles keep using matchText.
  */
 function foldedNames(track) {
   return (track?.artists ?? [])
-    .map((artist) => sortKey(artist?.name))
+    .map((artist) => foldArtist(artist?.name))
     .filter(Boolean)
 }
 
@@ -220,8 +244,8 @@ export function scorePair(spotify, youtube) {
     (diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR && !tailNamesVariant(youtube?.name))
   if (!titleClose) return null
 
-  const spotifyPrimary = sortKey(spotify?.primaryArtist?.name)
-  const primaryExact = spotifyPrimary !== '' && spotifyPrimary === sortKey(youtube?.primaryArtist?.name)
+  const spotifyPrimary = foldArtist(spotify?.primaryArtist?.name)
+  const primaryExact = spotifyPrimary !== '' && spotifyPrimary === foldArtist(youtube?.primaryArtist?.name)
 
   // M1: a title agreement alone is not evidence. Two different songs share a
   // title far more often than the same song changes its artist.
