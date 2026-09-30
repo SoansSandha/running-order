@@ -12,6 +12,7 @@
  */
 
 import { diceCoefficient, matchText } from '../csv/match.js'
+import { sortKey } from '../model/normalize.js'
 
 /** Within this, an exact title and artist is as good as it gets. */
 export const STRONG_DRIFT_MS = 2000
@@ -38,6 +39,26 @@ export const FUZZY_FLOOR = 0.9
 const VARIANT_TAIL =
   /\b(live|remix(?:es)?|version(?:s)?|acoustic|unplugged|slowed|reverb|cover(?:s)?|instrumental|duet|mix(?:es)?|edit(?:s)?|reprise|demo|karaoke|mashup|medley|nightcore|boosted|extended|8d|lo-?fi|sped[\s-]?up)\b/i
 
+/**
+ * The subset of VARIANT_TAIL that is safe to apply to a PIPE segment (C-1).
+ *
+ * A pipe segment is usually a credit — a channel, a featured artist, a
+ * producer, a "Latest Punjabi Songs 2025" tag. But `SONG | ARTIST | BASS
+ * BOOSTED | TAG` is the same upload convention, so a pipe segment can equally
+ * name a different recording, and a blanket exemption for pipes turned every
+ * word above into a no-op behind a single `|`.
+ *
+ * So pipes are checked, just against a narrower list: only words that cannot
+ * plausibly be part of a person's or a channel's name. The name-collidable
+ * members are DELIBERATELY absent — mix, edit, version, cover, demo, remix and
+ * live are exactly the words that show up in real credits ("MixSingh",
+ * "Mix Singh", "Cover Art by X"), and vetoing on those is what the pipe
+ * exemption was originally added to stop. Losing `| Live` and `| Remix` to
+ * that carve-out is the accepted cost of not re-breaking those credits.
+ */
+const PIPE_VARIANT_TAIL =
+  /\b(karaoke|instrumental|bass[\s-]?boosted|8[\s-]?d|nightcore|slowed|reverb|sped[\s-]?up|lo-?fi|unplugged|a[\s-]?cappella|acapella|acoustic|extended|mashup|medley)\b/i
+
 /** Where YouTube starts appending credits, tags and release years. */
 // `[` needs no escape inside a character class, and oxlint flags one.
 const TAIL_START = /\s[|([]|\s[-–—:]\s/
@@ -46,29 +67,58 @@ const TAIL_START = /\s[|([]|\s[-–—:]\s/
 const NEXT_SEGMENT = /\s[|([]/
 
 /**
+ * Split a tail into its segments, each tagged with the character that
+ * introduced it. Every tail begins with the whitespace TAIL_START matched, so
+ * segment[1] is always the separator.
+ *
+ * @returns {{separator: string, text: string}[]}
+ */
+function tailSegments(tail) {
+  const segments = []
+  let rest = tail
+  while (rest) {
+    const separator = rest[1] ?? ''
+    // NEXT_SEGMENT is searched from index 1 so this segment's own separator
+    // cannot match it; every step therefore advances by at least one char.
+    const next = rest.slice(1).search(NEXT_SEGMENT)
+    if (next === -1) {
+      segments.push({ separator, text: rest })
+      break
+    }
+    segments.push({ separator, text: rest.slice(0, next + 1) })
+    rest = rest.slice(next + 1)
+  }
+  return segments
+}
+
+/**
  * Whether a title's tail — the part TAIL_START finds — names a DIFFERENT
  * RECORDING rather than decoration or a credit (M6).
  *
- * A `|` always introduces a CREDIT in these titles (a channel, a featured
- * artist, a "Latest Punjabi Songs 2025"-style tag) — never a description of
- * the recording itself. So a variant word that only shows up in a LATER
- * credit ("Antidote | Cover Art by X", "Antidote | Mix Singh") must not veto
- * the match; only the tail's first segment is checked, and a pipe-led tail's
- * first segment is empty by definition. A `(`, a `[`, or a dash/colon set off
- * by spaces DOES introduce that kind of tag, and its content — up to
- * wherever the next segment begins — is what gets checked.
+ * Two lists, because the two kinds of separator carry different risk:
+ *
+ * - A `(`, a `[`, or a dash/colon set off by spaces introduces a TAG that
+ *   describes the recording, so its content is checked against the full
+ *   VARIANT_TAIL. Only the tail's FIRST such segment is checked: a variant
+ *   word appearing further down a credit chain is describing the credit, not
+ *   the recording.
+ * - A `|` usually introduces a CREDIT — a channel, a featured artist, a
+ *   "Latest Punjabi Songs 2025" tag — but NOT always: `SONG | ARTIST | BASS
+ *   BOOSTED | TAG` is the same upload convention, and exempting pipes
+ *   wholesale (as this function used to) silently disabled the entire veto
+ *   behind one pipe character. So every pipe segment is checked, against the
+ *   narrower PIPE_VARIANT_TAIL, which holds only words that cannot be part of
+ *   someone's name. That is what keeps "Antidote | Mix Singh" matching while
+ *   "Antidote | Karaoke" is vetoed.
  */
 function tailNamesVariant(title) {
   const text = String(title ?? '')
   const cut = text.search(TAIL_START)
   if (cut === -1) return false
 
-  const tail = text.slice(cut)
-  if (tail[1] === '|') return false
-
-  const next = tail.slice(1).search(NEXT_SEGMENT)
-  const segment = next === -1 ? tail : tail.slice(0, next + 1)
-  return VARIANT_TAIL.test(segment)
+  return tailSegments(text.slice(cut)).some(({ separator, text: segment }, index) =>
+    separator === '|' ? PIPE_VARIANT_TAIL.test(segment) : index === 0 && VARIANT_TAIL.test(segment),
+  )
 }
 
 /**
@@ -80,13 +130,29 @@ function tailNamesVariant(title) {
  * so without this, a fifth of the playlist reports as unmatched, and in 2c
  * every one of those would be "filled" as a duplicate of a track already
  * present.
+ *
+ * I-1: "Karan Aujla - Antidote (Official Video)" cuts to the ARTIST, not to a
+ * title, and self-titled tracks and intros are common enough that the
+ * fragment then fold-equals a real Spotify title — with the artist gate
+ * passing trivially, because YouTube does credit that artist. So a lead that
+ * is just the uploading artist's name is refused. There is deliberately no
+ * minimum length instead: "C4", "Magic" and "Snap" are all real titles in the
+ * live library and a length floor would drop them.
+ *
+ * @param {string} title
+ * @param {string} [primaryArtistName] the YouTube side's primary artist
  */
-export function leadingSegment(title) {
+export function leadingSegment(title, primaryArtistName) {
   const text = String(title ?? '')
   const cut = text.search(TAIL_START)
   if (cut === -1) return null
   if (tailNamesVariant(title)) return null
-  return text.slice(0, cut).trim() || null
+
+  const lead = text.slice(0, cut).trim()
+  if (!lead) return null
+  const leadKey = sortKey(lead)
+  if (leadKey !== '' && leadKey === sortKey(primaryArtistName)) return null
+  return lead
 }
 
 /** Album audio beats a music video beats a user upload, on a tie only (M3). */
@@ -101,9 +167,17 @@ export function videoTypeRank(track) {
   return VIDEO_TYPE_RANK[track?.videoType] ?? 0
 }
 
+/**
+ * I-2: artist names fold with sortKey, the same helper csv/match.js keys its
+ * artist pools with — NOT with matchText, which is the TITLE folder. The two
+ * disagree on a leading article (matchText('The PropheC') = 'the prophec',
+ * sortKey('The PropheC') = 'prophec'), and forking here meant this module
+ * dropped a pair outright that csv/match.js calls the same artist. Titles
+ * keep using matchText.
+ */
 function foldedNames(track) {
   return (track?.artists ?? [])
-    .map((artist) => matchText(artist?.name))
+    .map((artist) => sortKey(artist?.name))
     .filter(Boolean)
 }
 
@@ -134,7 +208,7 @@ export function scorePair(spotify, youtube) {
 
   const titleExact = spotifyTitle === youtubeTitle
   // M5: the same title wearing YouTube's credits is still the same title.
-  const leadFolded = matchText(leadingSegment(youtube?.name))
+  const leadFolded = matchText(leadingSegment(youtube?.name, youtube?.primaryArtist?.name))
   const titleViaLead = !titleExact && leadFolded !== '' && spotifyTitle === leadFolded
   // M6 applies to the dice path too (I-3): bigram Dice is length-forgiving,
   // so a long enough title still clears the floor with a variant tag still
@@ -146,9 +220,8 @@ export function scorePair(spotify, youtube) {
     (diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR && !tailNamesVariant(youtube?.name))
   if (!titleClose) return null
 
-  const primaryExact =
-    matchText(spotify?.primaryArtist?.name) !== '' &&
-    matchText(spotify?.primaryArtist?.name) === matchText(youtube?.primaryArtist?.name)
+  const spotifyPrimary = sortKey(spotify?.primaryArtist?.name)
+  const primaryExact = spotifyPrimary !== '' && spotifyPrimary === sortKey(youtube?.primaryArtist?.name)
 
   // M1: a title agreement alone is not evidence. Two different songs share a
   // title far more often than the same song changes its artist.
@@ -169,7 +242,11 @@ export function scorePair(spotify, youtube) {
   const why = []
   if (!titleExact && !titleViaLead) why.push('the titles differ slightly')
   if (!primaryExact) why.push('a different artist is credited first')
-  if (drift > STRONG_DRIFT_MS) why.push(`the durations differ by ${Math.round(drift / 1000)}s`)
+  // Ceil, not round: at 2001ms Math.round reads "differ by 2s" while 2s is
+  // the strong boundary, so two rows in different tiers would show the same
+  // delta with contradictory prose. This string is what the confirmation UI
+  // shows, so it has to round AWAY from the threshold it just failed.
+  if (drift > STRONG_DRIFT_MS) why.push(`the durations differ by ${Math.ceil(drift / 1000)}s`)
 
   return { tier: 'likely', durationDeltaMs, reason: capitalize(why.join(', ')) }
 }

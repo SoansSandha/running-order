@@ -100,7 +100,19 @@ describe('scorePair', () => {
   })
 
   test('the reason says why it is not strong', () => {
-    expect(scorePair(track(), track({ durationMs: 192000 })).reason).toMatch(/4s|duration/i)
+    // Asserts the whole sentence: /4s|duration/ could never fail on the
+    // number, because "duration" is a substring of "durations".
+    expect(scorePair(track(), track({ durationMs: 192000 })).reason).toBe(
+      'The durations differ by 4s',
+    )
+  })
+
+  test('a drift just past the strong boundary does not read as the boundary itself', () => {
+    // Math.round would say "2s" here, while 2s IS strong — two rows in
+    // different tiers showing the same delta with contradictory prose.
+    expect(scorePair(track(), track({ durationMs: 188000 + STRONG_DRIFT_MS + 1 })).reason).toBe(
+      'The durations differ by 3s',
+    )
   })
 
   // I-1: Math.abs(durationDeltaMs) is the only thing that makes drift
@@ -172,5 +184,85 @@ describe('scorePair', () => {
   test('an exact live-to-live match still reaches strong (the dice-veto exception)', () => {
     const result = scorePair(track({ name: 'Antidote (Live)' }), track({ name: 'Antidote (Live)' }))
     expect(result.tier).toBe('strong')
+  })
+
+  // C-1: the veto used to exempt a pipe-led tail wholesale, so a single `|`
+  // disabled every word in VARIANT_TAIL. Pipe segments are now checked
+  // against PIPE_VARIANT_TAIL, the subset that cannot be part of a name.
+  test.each([
+    'Antidote | Karaoke',
+    'Antidote | Instrumental',
+    'Antidote | Bass Boosted',
+    'Antidote | 8D Audio',
+    'Antidote | Nightcore',
+  ])('a variant named after a pipe is vetoed, not waved through as strong: %s', (name) => {
+    expect(scorePair(track(), track({ name }))).toBeNull()
+  })
+
+  test('a variant in a LATER pipe segment is vetoed too, not just the first', () => {
+    // The real upload convention the blanket pipe exemption missed:
+    // SONG | ARTIST | BASS BOOSTED | TAG. Checking only the tail's first
+    // segment would still wave this through.
+    const youtube = track({
+      name: 'ANTIDOTE | KARAN AUJLA | BASS BOOSTED | LATEST PUNJABI SONGS 2025',
+    })
+    expect(scorePair(track(), youtube)).toBeNull()
+  })
+
+  test.each([
+    'Antidote | MixSingh',
+    'Antidote | Mix Singh',
+    'Antidote | Cover Art by X',
+  ])('a name-collidable credit after a pipe is NOT vetoed: %s', (name) => {
+    // mix, cover, edit, version, demo, remix and live are deliberately absent
+    // from PIPE_VARIANT_TAIL — these are the credits the pipe exemption
+    // existed to protect, and narrowing the list must not re-break them.
+    expect(scorePair(track(), track({ name })).tier).toBe('strong')
+  })
+
+  test('a variant in a parenthesised tail is still vetoed by the full list', () => {
+    // Non-pipe tails keep the wider VARIANT_TAIL: "duet" and "version" are
+    // both in it, and neither is in the pipe subset.
+    expect(scorePair(track(), track({ name: 'Antidote (Duet Version 1)' }))).toBeNull()
+  })
+
+  // I-1: the leading-segment cut had no check that what it kept was a title
+  // rather than the artist's own name.
+  test('a lead that is only the artist name is not treated as a title', () => {
+    // Self-titled tracks and intros are common, so the kept fragment
+    // fold-equals a real Spotify title, and the artist gate passes trivially
+    // because YouTube does credit that artist.
+    const spotify = track({ name: 'Karan Aujla' })
+    const youtube = track({ name: 'Karan Aujla - Antidote (Official Video)' })
+    expect(scorePair(spotify, youtube)).toBeNull()
+  })
+
+  test('a genuinely short title still matches through the cut', () => {
+    // No minimum kept length: 'C4', 'Magic' and 'Snap' are real measured
+    // titles, and a length floor would break every one of them.
+    const artists = [{ id: 'h', name: 'Harkirat Sangha' }]
+    const spotify = track({ name: 'C4', artists, primaryArtist: artists[0] })
+    const youtube = track({ name: 'C4 - HARKIRAT SANGHA | STARBOY X', artists, primaryArtist: artists[0] })
+    expect(scorePair(spotify, youtube).tier).toBe('strong')
+  })
+
+  // I-2: artist names must fold with sortKey, the way csv/match.js folds
+  // them, not with matchText (the title folder). The two disagree on a
+  // leading article, and the disagreement dropped the pair entirely.
+  test('an artist differing only by a leading article still matches', () => {
+    // matchText('The PropheC') = 'the prophec'; sortKey('The PropheC') =
+    // 'prophec'. csv/match.js calls these the same artist, so this module
+    // must too, or a later deliverable adds the track a second time.
+    const spotify = track({
+      name: 'Kadi Na Kharaab',
+      artists: [{ id: 'p1', name: 'The PropheC' }],
+      primaryArtist: { id: 'p1', name: 'The PropheC' },
+    })
+    const youtube = track({
+      name: 'Kadi Na Kharaab',
+      artists: [{ id: 'p2', name: 'PropheC' }],
+      primaryArtist: { id: 'p2', name: 'PropheC' },
+    })
+    expect(scorePair(spotify, youtube).tier).toBe('strong')
   })
 })
