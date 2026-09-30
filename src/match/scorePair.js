@@ -31,18 +31,49 @@ export const FUZZY_FLOOR = 0.9
  * Both word boundaries are deliberate, and measured. Across 72 real tails the
  * only inflected form of any of these words is "MixSingh" — a producer's
  * name. A trailing-boundary-free pattern would read that as a variant and
- * refuse to cut a title that is only wearing credits.
+ * refuse to cut a title that is only wearing credits. The members that
+ * naturally inflect (remix, version, mix, edit, cover) also match their
+ * plural, so "Alternate Versions" vetoes the same as "Alternate Version".
  */
 const VARIANT_TAIL =
-  /\b(live|remix|version|acoustic|unplugged|slowed|reverb|cover|instrumental|duet|mix|edit|reprise|demo)\b/i
+  /\b(live|remix(?:es)?|version(?:s)?|acoustic|unplugged|slowed|reverb|cover(?:s)?|instrumental|duet|mix(?:es)?|edit(?:s)?|reprise|demo|karaoke|mashup|medley|nightcore|boosted|extended|8d|lo-?fi|sped[\s-]?up)\b/i
 
 /** Where YouTube starts appending credits, tags and release years. */
 // `[` needs no escape inside a character class, and oxlint flags one.
 const TAIL_START = /\s[|([]|\s[-–—:]\s/
 
+/** Where the tail's first segment ends and the next one begins. */
+const NEXT_SEGMENT = /\s[|([]/
+
+/**
+ * Whether a title's tail — the part TAIL_START finds — names a DIFFERENT
+ * RECORDING rather than decoration or a credit (M6).
+ *
+ * A `|` always introduces a CREDIT in these titles (a channel, a featured
+ * artist, a "Latest Punjabi Songs 2025"-style tag) — never a description of
+ * the recording itself. So a variant word that only shows up in a LATER
+ * credit ("Antidote | Cover Art by X", "Antidote | Mix Singh") must not veto
+ * the match; only the tail's first segment is checked, and a pipe-led tail's
+ * first segment is empty by definition. A `(`, a `[`, or a dash/colon set off
+ * by spaces DOES introduce that kind of tag, and its content — up to
+ * wherever the next segment begins — is what gets checked.
+ */
+function tailNamesVariant(title) {
+  const text = String(title ?? '')
+  const cut = text.search(TAIL_START)
+  if (cut === -1) return false
+
+  const tail = text.slice(cut)
+  if (tail[1] === '|') return false
+
+  const next = tail.slice(1).search(NEXT_SEGMENT)
+  const segment = next === -1 ? tail : tail.slice(0, next + 1)
+  return VARIANT_TAIL.test(segment)
+}
+
 /**
  * The part of a YouTube title before its trailing credits, or null when there
- * is no tail or the tail names a variant.
+ * is no tail or the tail's first segment names a variant.
  *
  * Measured against the live library: 72 of 384 titles carry such a tail, and
  * the folded full title scores as low as 0.48 against the clean Spotify one —
@@ -54,7 +85,7 @@ export function leadingSegment(title) {
   const text = String(title ?? '')
   const cut = text.search(TAIL_START)
   if (cut === -1) return null
-  if (VARIANT_TAIL.test(text.slice(cut))) return null
+  if (tailNamesVariant(title)) return null
   return text.slice(0, cut).trim() || null
 }
 
@@ -105,8 +136,14 @@ export function scorePair(spotify, youtube) {
   // M5: the same title wearing YouTube's credits is still the same title.
   const leadFolded = matchText(leadingSegment(youtube?.name))
   const titleViaLead = !titleExact && leadFolded !== '' && spotifyTitle === leadFolded
+  // M6 applies to the dice path too (I-3): bigram Dice is length-forgiving,
+  // so a long enough title still clears the floor with a variant tag still
+  // attached. The only exception is a genuine exact-fold match (titleExact),
+  // which already short-circuits above and never reaches this branch.
   const titleClose =
-    titleExact || titleViaLead || diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR
+    titleExact ||
+    titleViaLead ||
+    (diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR && !tailNamesVariant(youtube?.name))
   if (!titleClose) return null
 
   const primaryExact =

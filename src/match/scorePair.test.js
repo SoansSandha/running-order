@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { MAX_DRIFT_MS, STRONG_DRIFT_MS, scorePair } from './scorePair.js'
+import { diceCoefficient, matchText } from '../csv/match.js'
+import { FUZZY_FLOOR, MAX_DRIFT_MS, STRONG_DRIFT_MS, scorePair } from './scorePair.js'
 
 const track = (over = {}) => ({
   name: 'Antidote',
@@ -100,5 +101,76 @@ describe('scorePair', () => {
 
   test('the reason says why it is not strong', () => {
     expect(scorePair(track(), track({ durationMs: 192000 })).reason).toMatch(/4s|duration/i)
+  })
+
+  // I-1: Math.abs(durationDeltaMs) is the only thing that makes drift
+  // symmetric. Each of these asserts the TIER, not just the delta, so a
+  // mutant that drops Math.abs is caught (verified: see fix-round report).
+  test('a large negative drift (a short clip under the full title) is not proposed', () => {
+    // The case the finding names directly: a 30s clip against a 188s track.
+    expect(scorePair(track(), track({ durationMs: 188000 - 30000 }))).toBeNull()
+  })
+
+  test('a negative drift one past the max is not proposed at all', () => {
+    expect(scorePair(track(), track({ durationMs: 188000 - (MAX_DRIFT_MS + 1) }))).toBeNull()
+  })
+
+  test('a negative drift one past the strong threshold is likely, not strong', () => {
+    expect(scorePair(track(), track({ durationMs: 188000 - (STRONG_DRIFT_MS + 1) })).tier).toBe('likely')
+  })
+
+  // I-4: the veto list now covers the commonest same-length variant tails,
+  // and the inflecting members catch plurals.
+  test.each([
+    '(Karaoke)',
+    '(Bass Boosted)',
+    '(8D Audio)',
+    '(Lofi Flip)',
+    '(Extended)',
+    '(Alternate Versions)',
+  ])('a same-length %s upload is vetoed, not waved through as strong', (tail) => {
+    expect(scorePair(track(), track({ name: `Antidote ${tail}` }))).toBeNull()
+  })
+
+  test('a producer credited after a pipe still reaches strong (MixSingh hard constraint)', () => {
+    // Hard constraint: MixSingh is a producer's name, not a mix/remix tag —
+    // the trailing \b is what protects it, and I-4's plural additions must
+    // not weaken that.
+    expect(scorePair(track(), track({ name: 'Antidote | MixSingh' })).tier).toBe('strong')
+  })
+
+  // I-2: the veto only checks the tail's first segment, so a later
+  // pipe-chained credit cannot block a legitimate cut.
+  test('a spaced producer credit after a pipe still reaches strong', () => {
+    expect(scorePair(track(), track({ name: 'Antidote | Mix Singh' })).tier).toBe('strong')
+  })
+
+  test('a later pipe-chained credit does not veto the match', () => {
+    expect(scorePair(track(), track({ name: 'Antidote | Cover Art by X' })).tier).toBe('strong')
+  })
+
+  test('a variant named in the first tail segment still vetoes, even with a credit chain after it', () => {
+    const result = scorePair(
+      track({ name: 'Gal Dil Di' }),
+      track({ name: 'Gal Dil Di (Duet Version 1) | Some Channel' }),
+    )
+    expect(result).toBeNull()
+  })
+
+  // I-3: the dice fallback must consult the same veto as the leading-segment
+  // path, or a long enough title clears the fuzzy floor with a variant tag
+  // still attached.
+  test('a variant tail does not sneak through the dice fallback on a long title', () => {
+    // Measured: dice 0.912 between these two folded titles — well past
+    // FUZZY_FLOOR — so only an explicit veto on the dice path stops it.
+    const spotify = track({ name: 'Very Extremely Special Song' })
+    const youtube = track({ name: 'Very Extremely Special Song (Live)' })
+    expect(diceCoefficient(matchText(spotify.name), matchText(youtube.name))).toBeGreaterThanOrEqual(FUZZY_FLOOR)
+    expect(scorePair(spotify, youtube)).toBeNull()
+  })
+
+  test('an exact live-to-live match still reaches strong (the dice-veto exception)', () => {
+    const result = scorePair(track({ name: 'Antidote (Live)' }), track({ name: 'Antidote (Live)' }))
+    expect(result.tier).toBe('strong')
   })
 })
