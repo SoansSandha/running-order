@@ -138,4 +138,26 @@ describe('pairTracks', () => {
     expect(result.pairs[0].youtube.id).toBe('y1')
     expect(result.unmatchedSpotify.map((t) => t.id)).toEqual(['s2'])
   })
+
+  test('breaks a total tie by code-unit id order, not locale order', () => {
+    // Ids are deliberately case-mixed: 'Z1' and 'a1' are chosen because
+    // code-unit order and locale order pick OPPOSITE winners ('Z1' < 'a1' by
+    // code unit, since 'Z' is 0x5A and 'a' is 0x61, but 'Z1'.localeCompare('a1')
+    // says 'a1' sorts first). Renaming these to something tidy like 's1'/'s2'
+    // would silently remove the test's teeth — it would pass whichever way
+    // the comparator broke the tie.
+    const spotifyZ = sp('Z1', 'Antidote', 'Karan Aujla', 188000)
+    const spotifyA = sp('a1', 'Antidote', 'Karan Aujla', 188000)
+    const youtube = [yt('y1', 'Antidote', 'Karan Aujla', 188000)]
+
+    // Both candidates tie on tier (strong), drift (0ms) and videoType (both
+    // score against the same youtube track), so only the id tie-break decides.
+    const forward = pairTracks([spotifyZ, spotifyA], youtube)
+    const reversed = pairTracks([spotifyA, spotifyZ], youtube)
+
+    expect(forward.pairs[0].spotify.id).toBe('Z1')
+    expect(forward.unmatchedSpotify.map((t) => t.id)).toEqual(['a1'])
+    expect(reversed.pairs[0].spotify.id).toBe('Z1')
+    expect(reversed.unmatchedSpotify.map((t) => t.id)).toEqual(['a1'])
+  })
 })
