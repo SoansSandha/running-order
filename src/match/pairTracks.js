@@ -62,9 +62,23 @@ export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
     // one of the input arrays could then pick a different winner for a
     // contested track and drop a real match. Break the remaining tie on the
     // ids themselves so the ordering never depends on array position.
-    const bySpotifyId = String(a.spotify?.id ?? '').localeCompare(String(b.spotify?.id ?? ''))
-    if (bySpotifyId !== 0) return bySpotifyId
-    return String(a.youtube?.id ?? '').localeCompare(String(b.youtube?.id ?? ''))
+    //
+    // Plain `<` here, not `localeCompare`: localeCompare with no locale
+    // argument is ICU- and host-locale-dependent BY SPECIFICATION, so it can
+    // order the same two ids differently on different machines (e.g. mixed
+    // case ids like real Spotify ids sort differently under ICU collation
+    // than under code-unit order). That would reintroduce exactly the
+    // environment-dependent outcome this tie-break exists to remove. Plain
+    // relational comparison on strings is a UTF-16 code-unit comparison,
+    // which is spec-guaranteed and has no locale or ICU dependency — do not
+    // "simplify" this back to localeCompare.
+    const aSpotifyId = String(a.spotify?.id ?? '')
+    const bSpotifyId = String(b.spotify?.id ?? '')
+    if (aSpotifyId !== bSpotifyId) return aSpotifyId < bSpotifyId ? -1 : 1
+    const aYoutubeId = String(a.youtube?.id ?? '')
+    const bYoutubeId = String(b.youtube?.id ?? '')
+    if (aYoutubeId !== bYoutubeId) return aYoutubeId < bYoutubeId ? -1 : 1
+    return 0
   })
 
   const pairs = []
