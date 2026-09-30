@@ -53,12 +53,31 @@ export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
     const byDrift = Math.abs(a.durationDeltaMs) - Math.abs(b.durationDeltaMs)
     if (byDrift !== 0) return byDrift
     // M3: only ever a tie-break, never a reason to promote or reject.
-    return videoTypeRank(b.youtube) - videoTypeRank(a.youtube)
+    const byVideoType = videoTypeRank(b.youtube) - videoTypeRank(a.youtube)
+    if (byVideoType !== 0) return byVideoType
+    // C-1: tier, drift and videoTypeRank can ALL tie — two Spotify tracks
+    // sitting equally close to the same YouTube track, say. Array.prototype.sort
+    // is stable, so without a further tie-break the outcome silently falls back
+    // to insertion order, i.e. input order. That is not a total order: reversing
+    // one of the input arrays could then pick a different winner for a
+    // contested track and drop a real match. Break the remaining tie on the
+    // ids themselves so the ordering never depends on array position.
+    const bySpotifyId = String(a.spotify?.id ?? '').localeCompare(String(b.spotify?.id ?? ''))
+    if (bySpotifyId !== 0) return bySpotifyId
+    return String(a.youtube?.id ?? '').localeCompare(String(b.youtube?.id ?? ''))
   })
 
   const pairs = []
   const claimedSpotify = new Set()
   const claimedYoutube = new Set()
+  // I-1: this pass is greedy by confidence, not a cardinality-optimal
+  // assignment. With s1=188000ms, s2=191000ms against y1=188000ms, y2=185000ms,
+  // s1 ties strong with y1 (0s drift) while s1-y2 and s2-y1 are only likely
+  // (3s drift each). The optimal ASSIGNMENT pairs s1-y2 and s2-y1 (2 matches),
+  // but greedy claims the strongest candidate first (s1-y1) and starves s2, so
+  // this returns only 1 pair. That is a deliberate trade-off, not a bug: a
+  // wrong pair puts a wrong track in a real playlist, while an unmatched track
+  // merely falls through to a later search — so confidence wins over count.
   for (const candidate of candidates) {
     if (claimedSpotify.has(candidate.spotify) || claimedYoutube.has(candidate.youtube)) continue
     claimedSpotify.add(candidate.spotify)
