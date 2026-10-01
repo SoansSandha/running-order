@@ -4,6 +4,7 @@ import {
   FUZZY_FLOOR,
   MAX_DRIFT_MS,
   PIPE_VARIANT_TAIL,
+  SPELLING_DRIFT_MS,
   STRONG_DRIFT_MS,
   VARIANT_TAIL,
   scorePair,
@@ -359,6 +360,34 @@ describe('scorePair', () => {
     ],
   ])('titles that name the same variants are still likely on the dice path: %s / %s', (spotifyName, youtubeName) => {
     expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName })).tier).toBe('likely')
+  })
+
+  // A transliteration spelt two ways ("Sutya" / "Sutiya") scores below the
+  // fuzzy floor, so the length has to carry the evidence instead: a looser
+  // title is accepted only when the two run within a few seconds.
+  test('a spelling variant whose length agrees is likely', () => {
+    // Verbatim from the live libraries: Spotify and YouTube, same song.
+    const spotify = track({ name: 'Maar Sutya', ...credits('Amrinder Gill', 'Sukshinder Shinda'), durationMs: 239106 })
+    const youtube = track({ name: 'Maar Sutiya', ...credits('Amrinder Gill'), durationMs: 237000 })
+    expect(diceCoefficient(matchText(spotify.name), matchText(youtube.name))).toBeLessThan(FUZZY_FLOOR)
+    expect(scorePair(spotify, youtube)?.tier).toBe('likely')
+  })
+
+  test('a spelling variant is accepted up to the spelling window and no further', () => {
+    const spotify = track({ name: 'Maar Sutya', durationMs: 239000 })
+    expect(scorePair(spotify, track({ name: 'Maar Sutiya', durationMs: 239000 + SPELLING_DRIFT_MS }))?.tier).toBe('likely')
+    expect(scorePair(spotify, track({ name: 'Maar Sutiya', durationMs: 239000 + SPELLING_DRIFT_MS + 1 }))).toBeNull()
+  })
+
+  test.each([
+    // All three are in the live libraries, and each scores just under the
+    // fuzzy floor: the number is the only thing that differs, and a number is
+    // a different song, not a spelling.
+    ['Mai Tere Ishq Mein', 'Mai Tere Ishq Mein 2.0'],
+    ['Akhiyan Udeekdian', 'Akhiyan Udeekdian 2.0'],
+    ["Don't Look", "Don't Look 2"],
+  ])('titles that differ by a number are not spelling variants, even at the same length: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))).toBeNull()
   })
 
   test('an exact live-to-live match still reaches strong (the dice-veto exception)', () => {

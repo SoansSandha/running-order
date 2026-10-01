@@ -24,6 +24,19 @@ export const MAX_DRIFT_MS = 5000
 export const FUZZY_FLOOR = 0.9
 
 /**
+ * A looser title floor for a transliteration spelt two ways — "Maar Sutya" /
+ * "Maar Sutiya" scores 0.84 — accepted only where the lengths agree within
+ * SPELLING_DRIFT_MS, so the duration carries the evidence the title no longer
+ * can. Only ever likely, never strong.
+ *
+ * Measured across the live libraries: of the same-artist pairs scoring 0.6 to
+ * 0.9, the only one within 3s that nothing else already settles is that real
+ * miss. The next-closest is "Don't Look" / "Don't Look 2", 12.6s apart.
+ */
+export const SPELLING_FLOOR = 0.75
+export const SPELLING_DRIFT_MS = 3000
+
+/**
  * Tails that name a DIFFERENT RECORDING rather than decoration (M6).
  *
  * The same judgement matchText already makes by dropping `(feat. X)` while
@@ -475,10 +488,17 @@ export function scorePair(spotify, youtube) {
   // The tail check alone reads only YouTube's tail, so both titles must also
   // name the SAME variants: a bare "Live" with no separator, or a "(Lofi)" on
   // the Spotify side, otherwise clears the floor unchecked (audit root cause 4).
+  //
+  // And the same NUMBERS. A remake or sequel ("Mai Tere Ishq Mein 2.0",
+  // "Don't Look 2") scores just under the floor against the original at the
+  // same length; a number is a different song, not a spelling.
+  const dice = diceCoefficient(spotifyTitle, youtubeTitle)
+  const titleFuzzy = dice >= FUZZY_FLOOR || (dice >= SPELLING_FLOOR && drift <= SPELLING_DRIFT_MS)
   const titleClose =
     titleExact ||
     titleViaLead ||
-    (diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR &&
+    (titleFuzzy &&
+      numbersIn(spotifyTitle) === numbersIn(youtubeTitle) &&
       !tailNamesVariant(youtube?.name) &&
       sameVariants(spotify?.name, youtube?.name))
   if (!titleClose) return null
@@ -520,6 +540,11 @@ export function scorePair(spotify, youtube) {
   if (drift > STRONG_DRIFT_MS) why.push(`the durations differ by ${Math.ceil(drift / 1000)}s`)
 
   return { tier: 'likely', durationDeltaMs, reason: capitalize(why.join(', ')) }
+}
+
+/** Every number in a folded title, in order: "mai tere ishq mein 2 0" is "2 0". */
+function numbersIn(folded) {
+  return (folded.match(/\d+/g) ?? []).join(' ')
 }
 
 function capitalize(text) {
