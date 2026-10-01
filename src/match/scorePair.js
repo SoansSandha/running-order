@@ -205,7 +205,7 @@ function sameVariants(a, b) {
 
 /**
  * Fold an ARTIST name for comparison. Titles do NOT use this — they fold with
- * matchText alone.
+ * foldTitle.
  *
  * Both halves are load-bearing, and each one fixes a case the other breaks.
  * matchText folds punctuation but keeps a leading article; sortKey strips a
@@ -239,8 +239,41 @@ function sameVariants(a, b) {
  * either: "Kahlon", "Savi Kahlon" and "Shinda Kahlon" are three artists.
  */
 function foldArtist(name) {
+  if (NON_LATIN_LETTER.test(String(name ?? ''))) return foldAnyScript(name).replace(/ /g, '')
   const folded = sortKey(matchText(name)).replace(HONORIFIC, '').replace(/ /g, '')
   return ARTIST_ALIASES.get(folded) ?? folded
+}
+
+/**
+ * Fold a TITLE for comparison: matchText, unless the title holds a non-Latin
+ * letter (audit root cause 11).
+ *
+ * matchText keeps only a-z and 0-9. So a title in Gurmukhi, Devanagari or any
+ * other non-Latin script folded to '' and could never match, and a MIXED
+ * title folded to its Latin words alone — two different Gurmukhi songs that
+ * both end in "(Live)" both read as "live" and met as strong.
+ */
+function foldTitle(text) {
+  return NON_LATIN_LETTER.test(String(text ?? '')) ? foldAnyScript(text) : matchText(text)
+}
+
+/** A letter outside the Latin script. */
+const NON_LATIN_LETTER = /(?=\p{L})\P{Script=Latin}/u
+
+/**
+ * Fold text in any script, keeping every script's letters, marks and digits.
+ *
+ * The marks are why this cannot reuse matchText's diacritic strip: in
+ * Gurmukhi and Devanagari, vowel signs and the virama are marks, and
+ * stripping them turns different words into the same one.
+ */
+function foldAnyScript(value) {
+  return String(value ?? '')
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/['‘’]/g, '')
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ')
+    .trim()
 }
 
 const HONORIFIC = /^(?:ustad|pandit|pt) (?=\S)/
@@ -295,7 +328,7 @@ const ARTIST_ALIASES = new Map([
 function essentialTitle(title, credited) {
   const split = splitTitle(String(title ?? ''), credited)
   if (!split) return ''
-  return matchText([split.lead, ...split.segments.filter(segmentNamesVariant).map(({ text }) => text)].join(' '))
+  return foldTitle([split.lead, ...split.segments.filter(segmentNamesVariant).map(({ text }) => text)].join(' '))
 }
 
 /**
@@ -353,7 +386,7 @@ export function videoTypeRank(track) {
  * csv/match.js keys its artist pools with — over matchText. Folding with
  * matchText alone (the TITLE folder) is what made this module drop a pair
  * outright that csv/match.js calls the same artist. See foldArtist for why
- * neither helper is sufficient by itself. Titles keep using matchText.
+ * neither helper is sufficient by itself. Titles fold with foldTitle.
  *
  * Spotify's artists are already separate entries, so they are never split.
  */
@@ -419,8 +452,8 @@ export function scorePair(spotify, youtube) {
   const drift = Math.abs(durationDeltaMs)
   if (drift > MAX_DRIFT_MS) return null
 
-  const spotifyTitle = matchText(spotify?.name)
-  const youtubeTitle = matchText(youtube?.name)
+  const spotifyTitle = foldTitle(spotify?.name)
+  const youtubeTitle = foldTitle(youtube?.name)
   if (!spotifyTitle || !youtubeTitle) return null
 
   const titleExact = spotifyTitle === youtubeTitle

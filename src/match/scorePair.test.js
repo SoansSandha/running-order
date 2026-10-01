@@ -595,6 +595,34 @@ describe('scorePair', () => {
     expect(scorePair(track(credits(spotifyName)), track(credits(youtubeName)))?.tier).toBe('strong')
   })
 
+  // Audit root cause 11: matchText keeps only a-z and 0-9, so a non-Latin
+  // title folded to '' and never matched anything.
+  test.each([
+    ['ਮੇਰਾ ਮਨੁ ਲੋਚੈ', 'ਮੇਰਾ ਮਨੁ ਲੋਚੈ'],
+    ['तुम ही हो', 'तुम ही हो'],
+    // Decoration is still set aside around a non-Latin title.
+    ['ਮੇਰਾ ਮਨੁ ਲੋਚੈ', 'ਮੇਰਾ ਮਨੁ ਲੋਚੈ (Official Video)'],
+  ])('a non-Latin title still matches strong: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))?.tier).toBe('strong')
+  })
+
+  test('a non-Latin artist name still matches strong', () => {
+    const spotify = track(credits('ਭਾਈ ਹਰਜਿੰਦਰ ਸਿੰਘ'))
+    const youtube = track(credits('ਭਾਈ ਹਰਜਿੰਦਰ ਸਿੰਘ'))
+    expect(scorePair(spotify, youtube)?.tier).toBe('strong')
+  })
+
+  test.each([
+    // The same fold made a MIXED title keep only its Latin words, so two
+    // different Gurmukhi songs that both end in "(Live)" both read as "live"
+    // and met as strong.
+    ['ਮੇਰਾ ਮਨੁ ਲੋਚੈ (Live)', 'ਕੋਈ ਹੋਰ ਗੀਤ (Live)'],
+    ['ਮੇਰਾ ਮਨੁ ਲੋਚੈ', 'ਕੋਈ ਹੋਰ ਗੀਤ'],
+    ['तुम ही हो', 'तुम ही हो (Lofi)'],
+  ])('different non-Latin titles are not proposed: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))).toBeNull()
+  })
+
   test.each([
     // 'Dr' is part of a stage name, not an honorific: the live library
     // credits 'Dr. Zeus'.
