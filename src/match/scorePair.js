@@ -273,17 +273,54 @@ export function videoTypeRank(track) {
  * matchText alone (the TITLE folder) is what made this module drop a pair
  * outright that csv/match.js calls the same artist. See foldArtist for why
  * neither helper is sufficient by itself. Titles keep using matchText.
+ *
+ * Spotify's artists are already separate entries, so they are never split.
  */
-function foldedNames(track) {
+function spotifyNames(track) {
   return (track?.artists ?? [])
     .map((artist) => foldArtist(artist?.name))
     .filter(Boolean)
 }
 
+/**
+ * Where a YouTube byline joins several artists into ONE artist entry (audit
+ * root cause 5). Every shape here is measured in the live library, with
+ * Spotify listing the same artists separately: "AP Dhillon & Amari", "Ekam
+ * Sudhar, Manni Sandhu & Rav Hanjra", "Inder Chahal and Karan Aujla", "Money
+ * Aujla Feat Nesdi Jones".
+ *
+ * " x " is deliberately NOT a joiner, common as it is in Punjabi collab
+ * titles: the same library credits an artist called "Starboy X".
+ */
+const BYLINE_JOINER = /\s*(?:,|&|\band\b|\bfeat(?:uring)?\b\.?|\bft\b\.?)\s*/i
+
+/**
+ * Every name a YouTube track's artists can be matched by, folded: each whole
+ * entry, plus each artist a joined entry holds. The whole entry has to stay a
+ * candidate, or a duo credited as one name on both services ("Vishal-Shekhar"
+ * / "Vishal & Shekhar") stops agreeing in full.
+ */
+function youtubeNames(track) {
+  return (track?.artists ?? []).flatMap((artist) => {
+    const name = artist?.name
+    return [name, ...String(name ?? '').split(BYLINE_JOINER)].map(foldArtist).filter(Boolean)
+  })
+}
+
+/**
+ * What YouTube's PRIMARY artist can be matched by: the whole entry, or the
+ * first artist of a joined byline. Never a later one — that is a second or
+ * featured artist, and a match on it is only "shares an artist" (M1).
+ */
+function youtubePrimaryNames(track) {
+  const name = track?.primaryArtist?.name
+  return [foldArtist(name), foldArtist(String(name ?? '').split(BYLINE_JOINER)[0])].filter(Boolean)
+}
+
 /** Any credited artist in common, folded. */
 function sharesAnArtist(spotify, youtube) {
-  const theirs = new Set(foldedNames(youtube))
-  return foldedNames(spotify).some((name) => theirs.has(name))
+  const theirs = new Set(youtubeNames(youtube))
+  return spotifyNames(spotify).some((name) => theirs.has(name))
 }
 
 /**
@@ -326,7 +363,7 @@ export function scorePair(spotify, youtube) {
   if (!titleClose) return null
 
   const spotifyPrimary = foldArtist(spotify?.primaryArtist?.name)
-  const primaryExact = spotifyPrimary !== '' && spotifyPrimary === foldArtist(youtube?.primaryArtist?.name)
+  const primaryExact = spotifyPrimary !== '' && youtubePrimaryNames(youtube).includes(spotifyPrimary)
 
   // M1: a title agreement alone is not evidence. Two different songs share a
   // title far more often than the same song changes its artist.

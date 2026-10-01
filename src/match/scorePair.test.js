@@ -466,4 +466,36 @@ describe('scorePair', () => {
     })
     expect(scorePair(spotify, youtube).tier).toBe('strong')
   })
+
+  // Audit root cause 5: YouTube often holds a whole byline as ONE artist
+  // entry, which never equalled any of Spotify's separate artists. Each row
+  // below is a joined credit taken verbatim from the live library.
+  test.each([
+    [['AP Dhillon', 'Amari'], 'AP Dhillon & Amari'],
+    [['Ekam Sudhar', 'Manni Sandhu', 'Rav Hanjra'], 'Ekam Sudhar, Manni Sandhu & Rav Hanjra'],
+    [['Inder Chahal', 'Karan Aujla'], 'Inder Chahal and Karan Aujla'],
+    [['Money Aujla', 'Nesdi Jones'], 'Money Aujla Feat Nesdi Jones'],
+  ])('a byline joined into one YouTube entry still matches: %j vs %s', (spotifyNames, byline) => {
+    const spotify = track(credits(...spotifyNames))
+    const youtube = track(credits(byline))
+    expect(scorePair(spotify, youtube)?.tier).toBe('strong')
+  })
+
+  test('a Spotify artist who is not first in the joined byline is likely, not strong', () => {
+    // Shares an artist, but YouTube credits someone else first (M1).
+    expect(scorePair(track(credits('Karan Aujla')), track(credits('Inder Chahal and Karan Aujla')))?.tier).toBe('likely')
+  })
+
+  test('a duo credited as one name on both services still matches strong', () => {
+    // The whole credit has to stay a candidate alongside its parts: comparing
+    // only the first part would read 'Vishal-Shekhar' as 'Vishal' and demote
+    // the pair to likely.
+    expect(scorePair(track(credits('Vishal-Shekhar')), track(credits('Vishal & Shekhar')))?.tier).toBe('strong')
+  })
 })
+
+/** Artists in credit order, as both services' tracks carry them. */
+function credits(...names) {
+  const artists = names.map((name) => ({ id: null, name }))
+  return { artists, primaryArtist: artists[0] }
+}
