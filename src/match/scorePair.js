@@ -571,14 +571,21 @@ export function scorePair(spotify, youtube) {
   if (!primaryExact && !sharesAnArtist(spotify, youtube)) return null
 
   // Cutting decoration loses nothing, so a lead match is as good as an exact
-  // one — the artist and the duration still have to agree (M5, M6).
-  if ((titleExact || titleViaLead) && primaryExact && drift <= STRONG_DRIFT_MS) {
+  // one — an artist and the duration still have to agree (M5, M6).
+  //
+  // Owner decision: artist ORDER and COUNT do not matter. YouTube often
+  // credits three where Spotify credits one, or the same three in another
+  // order ("SWITCHIN' LANES"), and with the exact title and the length inside
+  // the strong window, any artist in common is enough. The reason still
+  // says which kind of artist agreement it was.
+  if ((titleExact || titleViaLead) && drift <= STRONG_DRIFT_MS) {
+    const title = titleExact ? 'exactly' : 'once credits and tags are set aside'
     return {
       tier: 'strong',
       durationDeltaMs,
-      reason: titleExact
-        ? 'Title and artist match exactly'
-        : 'Title and artist match once credits and tags are set aside',
+      reason: primaryExact
+        ? `Title and artist match ${title}`
+        : `Title matches ${title}, and an artist is credited on both`,
     }
   }
 

@@ -122,6 +122,8 @@ describe('scorePair', () => {
   })
 
   test('a featured artist on one side counts as an artist agreement', () => {
+    // Owner decision: with the exact title and the length agreeing, any
+    // artist in common is enough for strong, whoever is credited first.
     const spotify = track({
       artists: [{ id: 'a1', name: 'Karan Aujla' }, { id: 'a2', name: 'Mxrci' }],
     })
@@ -129,7 +131,7 @@ describe('scorePair', () => {
       artists: [{ id: 'a2', name: 'Mxrci' }],
       primaryArtist: { id: 'a2', name: 'Mxrci' },
     })
-    expect(scorePair(spotify, youtube).tier).toBe('likely')
+    expect(scorePair(spotify, youtube).tier).toBe('strong')
   })
 
   test('a live version is not proposed, because it runs long', () => {
@@ -536,11 +538,10 @@ describe('scorePair', () => {
 
   test('an artist-first title is read past an artist credited second, too', () => {
     // The lead is checked against every credited artist, not only the
-    // primary: here YouTube credits the producer first. Likely, not strong,
-    // because the primary artists differ (M1).
+    // primary: here YouTube credits the producer first.
     const spotify = track({ name: 'Excuses', ...credits('AP Dhillon') })
     const youtube = track({ name: 'AP Dhillon - Excuses (Official Video)', ...credits('Intense', 'AP Dhillon') })
-    expect(scorePair(spotify, youtube)?.tier).toBe('likely')
+    expect(scorePair(spotify, youtube)?.tier).toBe('strong')
   })
 
   test.each([
@@ -678,15 +679,45 @@ describe('scorePair', () => {
     expect(scorePair(spotify, youtube)?.tier).toBe('strong')
   })
 
-  test('a Spotify artist who is not first in the joined byline is likely, not strong', () => {
-    // Shares an artist, but YouTube credits someone else first (M1).
-    expect(scorePair(track(credits('Karan Aujla')), track(credits('Inder Chahal and Karan Aujla')))?.tier).toBe('likely')
+  test('a Spotify artist who is not first in the joined byline still matches strong', () => {
+    expect(scorePair(track(credits('Karan Aujla')), track(credits('Inder Chahal and Karan Aujla')))?.tier).toBe('strong')
+  })
+
+  // Owner decision: artist ORDER and COUNT do not matter. With the exact title
+  // and the length within the strong window, any artist in common is a strong
+  // match. Both rows are verbatim titles and artists from the live libraries.
+  test('the same artists credited in a different order still match strong', () => {
+    const spotify = track({ name: "SWITCHIN' LANES", ...credits('Tegi Pannu', 'Sukha', 'Manni Sandhu') })
+    const youtube = track({ name: "SWITCHIN' LANES", ...credits('Sukha', 'Manni Sandhu', 'Tegi Pannu') })
+    expect(scorePair(spotify, youtube)?.tier).toBe('strong')
+  })
+
+  test.each([
+    // Spotify credits two, YouTube one — and not Spotify's first.
+    [['SARRB', 'Starboy X'], 'Kamlee', ['Starboy X'], 'KAMLEE (Official Video) SARRB | Starboy X'],
+    // YouTube credits three, Spotify one, and not first.
+    [['Karan Aujla'], 'Antidote', ['Ikky', 'Karan Aujla', 'Mxrci'], 'Antidote'],
+  ])('a different number of credited artists still matches strong: %j / %j', (spotifyArtists, spotifyName, youtubeArtists, youtubeName) => {
+    const spotify = track({ name: spotifyName, ...credits(...spotifyArtists) })
+    const youtube = track({ name: youtubeName, ...credits(...youtubeArtists) })
+    expect(scorePair(spotify, youtube)?.tier).toBe('strong')
+  })
+
+  test('a strong match on an artist in common does not claim the artists match exactly', () => {
+    // The reason is what the confirmation UI shows beside the pair.
+    const youtube = track(credits('Ikky', 'Karan Aujla'))
+    expect(scorePair(track(), youtube)?.reason).toBe('Title matches exactly, and an artist is credited on both')
+  })
+
+  test('an artist in common outside the strong window is still likely, and says why', () => {
+    const youtube = track({ ...credits('Ikky', 'Karan Aujla'), durationMs: 188000 + STRONG_DRIFT_MS + 1 })
+    expect(scorePair(track(), youtube)?.reason).toBe('A different artist is credited first, the durations differ by 3s')
   })
 
   test('a duo credited as one name on both services still matches strong', () => {
-    // The whole credit has to stay a candidate alongside its parts: comparing
-    // only the first part would read 'Vishal-Shekhar' as 'Vishal' and demote
-    // the pair to likely.
+    // The whole credit has to stay a candidate alongside its parts: split
+    // into 'Vishal' and 'Shekhar' alone, neither equals Spotify's one entry
+    // and the pair is lost outright.
     expect(scorePair(track(credits('Vishal-Shekhar')), track(credits('Vishal & Shekhar')))?.tier).toBe('strong')
   })
 
