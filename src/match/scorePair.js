@@ -34,7 +34,18 @@ export const FUZZY_FLOOR = 0.9
  * name. A trailing-boundary-free pattern would read that as a variant and
  * refuse to cut a title that is only wearing credits. The members that
  * naturally inflect (remix, version, mix, edit, cover) also match their
- * plural, so "Alternate Versions" vetoes the same as "Alternate Version".
+ * plural, so "Alternate Versions" vetoes the same as "Alternate Version";
+ * remix, reverb and reprise also match their past tense ("Remixed by X",
+ * "Reverbed"), and boost its bare form ("Bass Boost").
+ *
+ * Spatial-audio re-uploads come in every numeral (3D, 9D, 16D...), but the
+ * numeral form is tied to the word "audio" except for the two common bare
+ * tags, 8D and 16D. A bare numeral-D would veto "(2D Animated Video)" and
+ * "(3D Video)" too, and those are the same recording with different pictures.
+ *
+ * No token may contain a `|`, even inside a group: the superset test in
+ * scorePair.test.js splits these patterns on it. Use a character class
+ * instead (`remix(?:e[sd])?`, not `remix(?:es|ed)?`).
  *
  * INVARIANT: this list is a strict SUPERSET of PIPE_VARIANT_TAIL, token for
  * token. A parenthesised tag is the MORE canonical way to mark a variant, so
@@ -47,7 +58,7 @@ export const FUZZY_FLOOR = 0.9
  * which is why both are exported: that test reads their sources.
  */
 export const VARIANT_TAIL =
-  /\b(live|remix(?:es)?|version(?:s)?|acoustic|unplugged|slowed|reverb|cover(?:s)?|instrumental|duet|mix(?:es)?|edit(?:s)?|reprise|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boosted|extended|8[\s-]?d|lo-?fi|sped[\s-]?up|a[\s-]?cappella|acapella)\b/i
+  /\b(live|remix(?:e[sd])?|rmx|version(?:s)?|acoustic|unplugged|slowed|reverb(?:ed)?|cover(?:s)?|instrumental|inst|duet|mix(?:es)?|edit(?:s)?|reprised?|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boost(?:ed)?|extended|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|lo[\s-]?fi|sped[\s-]?up|a[\s-]?cappella|acapella|minus[\s-]?one|without[\s-]?vocals?)\b/i
 
 /**
  * The subset of VARIANT_TAIL that is safe to apply to a PIPE segment (C-1).
@@ -67,7 +78,7 @@ export const VARIANT_TAIL =
  * that carve-out is the accepted cost of not re-breaking those credits.
  */
 export const PIPE_VARIANT_TAIL =
-  /\b(karaoke|instrumental|bass[\s-]?boosted|8[\s-]?d|nightcore|slowed|reverb|sped[\s-]?up|lo-?fi|unplugged|a[\s-]?cappella|acapella|acoustic|extended|mashup|medley)\b/i
+  /\b(karaoke|instrumental|bass[\s-]?boost(?:ed)?|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|nightcore|slowed|reverb(?:ed)?|sped[\s-]?up|lo[\s-]?fi|unplugged|a[\s-]?cappella|acapella|acoustic|extended|mashup|medley)\b/i
 
 /** Where YouTube starts appending credits, tags and release years. */
 // `[` needs no escape inside a character class, and oxlint flags one.

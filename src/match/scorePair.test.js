@@ -186,6 +186,47 @@ describe('scorePair', () => {
     expect(scorePair(track(), track({ name: `Antidote ${tail}` }))).toBeNull()
   })
 
+  // Audit root cause 2: real spellings the vocabulary missed. Each of these is
+  // a re-processed or re-recorded upload that keeps the original's length, so
+  // duration cannot catch it and it reached strong.
+  test.each([
+    '(16D Audio)',
+    '(9D Audio)',
+    '(3D Audio)',
+    '(16D)',
+    '(Bass Boost)',
+    '(Lo Fi)',
+    '(Remixed by DJ Chetas)',
+    '(Rmx)',
+    '(Reprised)',
+    '(Reverbed)',
+    '(Inst.)',
+    '(Minus One)',
+    '(Without Vocals)',
+  ])('a same-length %s upload is vetoed, not waved through as strong', (tail) => {
+    expect(scorePair(track(), track({ name: `Antidote ${tail}` }))).toBeNull()
+  })
+
+  test.each([
+    'Antidote | 16D Audio',
+    'Antidote | Bass Boost',
+    'Antidote | Lo Fi',
+    'Antidote | Reverbed',
+  ])('a name-safe spelling is vetoed after a pipe too: %s', (name) => {
+    expect(scorePair(track(), track({ name }))).toBeNull()
+  })
+
+  test.each([
+    'Antidote (2D Animated Video)',
+    'Antidote (3D Video)',
+    'Antidote (4K Video)',
+  ])('a numbered VIDEO tag is decoration, not spatial audio: %s', (name) => {
+    // The spatial-audio spelling is tied to the word "audio" for this reason:
+    // a bare numeral-D would also veto an animated or 3D music video, which is
+    // the same recording with different pictures.
+    expect(scorePair(track(), track({ name })).tier).toBe('strong')
+  })
+
   test('a producer credited after a pipe still reaches strong (MixSingh hard constraint)', () => {
     // Hard constraint: MixSingh is a producer's name, not a mix/remix tag —
     // the trailing \b is what protects it, and I-4's plural additions must
