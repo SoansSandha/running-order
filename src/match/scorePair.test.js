@@ -193,8 +193,8 @@ describe('scorePair', () => {
     expect(scorePair(track(), track({ name: 'Antidote | MixSingh' })).tier).toBe('strong')
   })
 
-  // I-2: the veto only checks the tail's first segment, so a later
-  // pipe-chained credit cannot block a legitimate cut.
+  // I-2: a pipe-chained credit cannot block a legitimate cut, because pipe
+  // segments are only checked against the narrow PIPE_VARIANT_TAIL.
   test('a spaced producer credit after a pipe still reaches strong', () => {
     expect(scorePair(track(), track({ name: 'Antidote | Mix Singh' })).tier).toBe('strong')
   })
@@ -209,6 +209,24 @@ describe('scorePair', () => {
       track({ name: 'Gal Dil Di (Duet Version 1) | Some Channel' }),
     )
     expect(result).toBeNull()
+  })
+
+  // Audit root cause 1: only the tail's FIRST bracket used to be checked, and
+  // a leading credit always takes that slot. '(feat. X)' comes before the
+  // version tag in ordinary storefront metadata, so the commonest way to name
+  // a variant of a feat track walked straight past the veto to strong.
+  test.each([
+    'Antidote (feat. Ikky) (Remix)',
+    'Antidote (From "Making Memories") (Instrumental)',
+    'Antidote - Karan Aujla (8D Audio)',
+  ])('a variant tag after a leading credit is vetoed, not waved through as strong: %s', (name) => {
+    expect(scorePair(track(), track({ name }))).toBeNull()
+  })
+
+  test('a later bracket that is only decoration still lets the title through', () => {
+    // The other half of the pair above: checking every bracket must not turn
+    // an ordinary second bracket into a veto.
+    expect(scorePair(track(), track({ name: 'Antidote (feat. Ikky) (Official Video)' })).tier).toBe('strong')
   })
 
   // I-3: the dice fallback must consult the same veto as the leading-segment

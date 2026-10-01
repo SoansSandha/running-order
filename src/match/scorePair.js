@@ -73,7 +73,7 @@ export const PIPE_VARIANT_TAIL =
 // `[` needs no escape inside a character class, and oxlint flags one.
 const TAIL_START = /\s[|([]|\s[-–—:]\s/
 
-/** Where the tail's first segment ends and the next one begins. */
+/** Where one tail segment ends and the next one begins. */
 const NEXT_SEGMENT = /\s[|([]/
 
 /**
@@ -109,9 +109,10 @@ function tailSegments(tail) {
  *
  * - A `(`, a `[`, or a dash/colon set off by spaces introduces a TAG that
  *   describes the recording, so its content is checked against the full
- *   VARIANT_TAIL. Only the tail's FIRST such segment is checked: a variant
- *   word appearing further down a credit chain is describing the credit, not
- *   the recording.
+ *   VARIANT_TAIL. EVERY such segment is checked, not just the first: a
+ *   leading credit always takes the first slot — `Song (feat. X) (Remix)` is
+ *   the ordinary storefront order — so checking only the first segment let
+ *   the commonest way of naming a variant of a feat track reach strong.
  * - A `|` usually introduces a CREDIT — a channel, a featured artist, a
  *   "Latest Punjabi Songs 2025" tag — but NOT always: `SONG | ARTIST | BASS
  *   BOOSTED | TAG` is the same upload convention, and exempting pipes
@@ -126,8 +127,8 @@ function tailNamesVariant(title) {
   const cut = text.search(TAIL_START)
   if (cut === -1) return false
 
-  return tailSegments(text.slice(cut)).some(({ separator, text: segment }, index) =>
-    separator === '|' ? PIPE_VARIANT_TAIL.test(segment) : index === 0 && VARIANT_TAIL.test(segment),
+  return tailSegments(text.slice(cut)).some(({ separator, text: segment }) =>
+    (separator === '|' ? PIPE_VARIANT_TAIL : VARIANT_TAIL).test(segment),
   )
 }
 
@@ -158,7 +159,7 @@ function foldArtist(name) {
 
 /**
  * The part of a YouTube title before its trailing credits, or null when there
- * is no tail or the tail's first segment names a variant.
+ * is no tail or any segment of the tail names a variant.
  *
  * Measured against the live library: 72 of 384 titles carry such a tail, and
  * the folded full title scores as low as 0.48 against the clean Spotify one —
