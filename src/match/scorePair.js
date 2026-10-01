@@ -17,8 +17,19 @@ import { sortKey } from '../model/normalize.js'
 /** Within this, an exact title and artist is as good as it gets. */
 export const STRONG_DRIFT_MS = 2000
 
-/** Beyond this, nothing is proposed at any confidence (M2). */
+/** Beyond this, nothing from the catalogue is proposed at any confidence (M2). */
 export const MAX_DRIFT_MS = 5000
+
+/**
+ * The same limit for a Spotify LOCAL file — the user's own audio, tagged by
+ * hand. Its length is the length of their copy (a different rip, silence
+ * trimmed or padded), not catalogue data, so it is weaker evidence: it may
+ * sit further from YouTube's, and a misspelt hand-typed title is accepted
+ * across this whole window rather than SPELLING_DRIFT_MS. "Haye Mera Dil" is
+ * a local file 7s shorter than YouTube's "Hai Mera Dil". Likely, never
+ * strong, beyond STRONG_DRIFT_MS.
+ */
+export const LOCAL_MAX_DRIFT_MS = 10_000
 
 /** Dice coefficient on character bigrams, as the CSV matcher uses. */
 export const FUZZY_FLOOR = 0.9
@@ -405,12 +416,21 @@ export function videoTypeRank(track) {
  * outright that csv/match.js calls the same artist. See foldArtist for why
  * neither helper is sufficient by itself. Titles fold with foldTitle.
  *
- * Spotify's artists are already separate entries, so they are never split.
+ * Spotify's catalogue artists are already separate entries, so they are never
+ * split. A LOCAL file's are not: its artist field is the user's own tag, free
+ * text exactly like a YouTube byline ("Alfaaz; Yo Yo Honey Singh").
  */
 function spotifyNames(track) {
+  if (track?.isLocal) return bylineNames(track)
   return (track?.artists ?? [])
     .map((artist) => foldArtist(artist?.name))
     .filter(Boolean)
+}
+
+/** What Spotify's primary artist can be matched by, split like a byline only for a local file. */
+function spotifyPrimaryNames(track) {
+  if (track?.isLocal) return bylinePrimaryNames(track)
+  return [foldArtist(track?.primaryArtist?.name)].filter(Boolean)
 }
 
 /**
@@ -421,17 +441,18 @@ function spotifyNames(track) {
  * Aujla Feat Nesdi Jones".
  *
  * " x " is deliberately NOT a joiner, common as it is in Punjabi collab
- * titles: the same library credits an artist called "Starboy X".
+ * titles: the same library credits an artist called "Starboy X". ";" is,
+ * because that is how a Spotify local file's own tags join artists.
  */
-const BYLINE_JOINER = /\s*(?:,|&|\band\b|\bfeat(?:uring)?\b\.?|\bft\b\.?)\s*/i
+const BYLINE_JOINER = /\s*(?:,|;|&|\band\b|\bfeat(?:uring)?\b\.?|\bft\b\.?)\s*/i
 
 /**
- * Every name a YouTube track's artists can be matched by, folded: each whole
- * entry, plus each artist a joined entry holds. The whole entry has to stay a
- * candidate, or a duo credited as one name on both services ("Vishal-Shekhar"
- * / "Vishal & Shekhar") stops agreeing in full.
+ * Every name a free-text byline's artists can be matched by, folded: each
+ * whole entry, plus each artist a joined entry holds. The whole entry has to
+ * stay a candidate, or a duo credited as one name on both services
+ * ("Vishal-Shekhar" / "Vishal & Shekhar") stops agreeing in full.
  */
-function youtubeNames(track) {
+function bylineNames(track) {
   return (track?.artists ?? []).flatMap((artist) => {
     const name = artist?.name
     return [name, ...String(name ?? '').split(BYLINE_JOINER)].map(foldArtist).filter(Boolean)
@@ -439,18 +460,18 @@ function youtubeNames(track) {
 }
 
 /**
- * What YouTube's PRIMARY artist can be matched by: the whole entry, or the
+ * What a byline's PRIMARY artist can be matched by: the whole entry, or the
  * first artist of a joined byline. Never a later one — that is a second or
  * featured artist, and a match on it is only "shares an artist" (M1).
  */
-function youtubePrimaryNames(track) {
+function bylinePrimaryNames(track) {
   const name = track?.primaryArtist?.name
   return [foldArtist(name), foldArtist(String(name ?? '').split(BYLINE_JOINER)[0])].filter(Boolean)
 }
 
 /** Any credited artist in common, folded. */
 function sharesAnArtist(spotify, youtube) {
-  const theirs = new Set(youtubeNames(youtube))
+  const theirs = new Set(bylineNames(youtube))
   return spotifyNames(spotify).some((name) => theirs.has(name))
 }
 
@@ -467,7 +488,8 @@ export function scorePair(spotify, youtube) {
 
   const durationDeltaMs = youtubeMs - spotifyMs
   const drift = Math.abs(durationDeltaMs)
-  if (drift > MAX_DRIFT_MS) return null
+  const isLocal = spotify?.isLocal === true
+  if (drift > (isLocal ? LOCAL_MAX_DRIFT_MS : MAX_DRIFT_MS)) return null
 
   const spotifyTitle = foldTitle(spotify?.name)
   const youtubeTitle = foldTitle(youtube?.name)
@@ -475,7 +497,7 @@ export function scorePair(spotify, youtube) {
 
   const titleExact = spotifyTitle === youtubeTitle
   // M5: the same title wearing different decoration is still the same title.
-  const youtubeEssential = essentialTitle(youtube?.name, new Set(youtubeNames(youtube)))
+  const youtubeEssential = essentialTitle(youtube?.name, new Set(bylineNames(youtube)))
   const titleViaLead =
     !titleExact &&
     youtubeEssential !== '' &&
@@ -493,7 +515,8 @@ export function scorePair(spotify, youtube) {
   // "Don't Look 2") scores just under the floor against the original at the
   // same length; a number is a different song, not a spelling.
   const dice = diceCoefficient(spotifyTitle, youtubeTitle)
-  const titleFuzzy = dice >= FUZZY_FLOOR || (dice >= SPELLING_FLOOR && drift <= SPELLING_DRIFT_MS)
+  const spellingWindow = isLocal ? LOCAL_MAX_DRIFT_MS : SPELLING_DRIFT_MS
+  const titleFuzzy = dice >= FUZZY_FLOOR || (dice >= SPELLING_FLOOR && drift <= spellingWindow)
   const titleClose =
     titleExact ||
     titleViaLead ||
@@ -503,8 +526,8 @@ export function scorePair(spotify, youtube) {
       sameVariants(spotify?.name, youtube?.name))
   if (!titleClose) return null
 
-  const spotifyPrimary = foldArtist(spotify?.primaryArtist?.name)
-  const primaryExact = spotifyPrimary !== '' && youtubePrimaryNames(youtube).includes(spotifyPrimary)
+  const youtubePrimaries = bylinePrimaryNames(youtube)
+  const primaryExact = spotifyPrimaryNames(spotify).some((name) => youtubePrimaries.includes(name))
 
   // M1: a title agreement alone is not evidence. Two different songs share a
   // title far more often than the same song changes its artist.

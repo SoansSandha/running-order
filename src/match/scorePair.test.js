@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { diceCoefficient, matchText } from '../csv/match.js'
 import {
   FUZZY_FLOOR,
+  LOCAL_MAX_DRIFT_MS,
   MAX_DRIFT_MS,
   PIPE_VARIANT_TAIL,
   SPELLING_DRIFT_MS,
@@ -388,6 +389,38 @@ describe('scorePair', () => {
     ["Don't Look", "Don't Look 2"],
   ])('titles that differ by a number are not spelling variants, even at the same length: %s / %s', (spotifyName, youtubeName) => {
     expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))).toBeNull()
+  })
+
+  // A Spotify LOCAL file is the user's own audio, tagged by hand. Its artist
+  // field is free text, like a YouTube byline, and its length is the length
+  // of their copy rather than catalogue data.
+  test('a local file credited to joined artists still matches strong', () => {
+    const spotify = track({ name: 'Hai Mera Dil', ...credits('Alfaaz; Yo Yo Honey Singh'), durationMs: 210000, isLocal: true })
+    const youtube = track({ name: 'Hai Mera Dil', ...credits('Alfaaz'), durationMs: 210000 })
+    expect(scorePair(spotify, youtube)?.tier).toBe('strong')
+  })
+
+  test('a local file is given a wider length window, as likely', () => {
+    // Verbatim from the live libraries: the Spotify side is a local file 7s
+    // shorter than YouTube's album audio, and spelt differently.
+    const spotify = track({ name: 'Haye Mera Dil', ...credits('Alfaaz; Yo Yo Honey Singh'), durationMs: 203000, isLocal: true })
+    const youtube = track({ name: 'Hai Mera Dil', ...credits('Alfaaz'), durationMs: 210000 })
+    expect(scorePair(spotify, youtube)?.tier).toBe('likely')
+    // The same pair from the Spotify catalogue gets no such allowance.
+    expect(scorePair({ ...spotify, isLocal: false }, youtube)).toBeNull()
+  })
+
+  test('a local file is accepted up to the local window and no further', () => {
+    const spotify = track({ name: 'Hai Mera Dil', durationMs: 210000, isLocal: true })
+    expect(scorePair(spotify, track({ name: 'Hai Mera Dil', durationMs: 210000 + LOCAL_MAX_DRIFT_MS }))?.tier).toBe('likely')
+    expect(scorePair(spotify, track({ name: 'Hai Mera Dil', durationMs: 210000 + LOCAL_MAX_DRIFT_MS + 1 }))).toBeNull()
+  })
+
+  test('a local file still needs an artist in common', () => {
+    // Verbatim from the live libraries: the same title sung by someone else.
+    const spotify = track({ name: 'Putt Jatt Da', ...credits('Diljit Dosanjh'), durationMs: 164000, isLocal: true })
+    const youtube = track({ name: 'Putt Jatt Da', ...credits('Simiran Kaur Dhadli', 'Desi Trap Music'), durationMs: 156000 })
+    expect(scorePair(spotify, youtube)).toBeNull()
   })
 
   test('an exact live-to-live match still reaches strong (the dice-veto exception)', () => {
