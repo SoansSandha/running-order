@@ -750,15 +750,18 @@ left parked. Still open:
   Kahlon` and `Shinda Kahlon` are three artists.
 - **A transliterated title never meets its native-script form**
   (`Tum Hi Ho` / `तुम ही हो`). Identical native-script titles now match.
-- **The same artists credited in a different order are only likely.**
-  Spotify lists `Tegi Pannu, Sukha, Manni Sandhu`, YouTube `Sukha, Manni
-  Sandhu, Tegi Pannu`: six such pairs in the live libraries, all correct.
-  Whether an identical artist set should count as a primary match is an
-  owner decision.
-- **An expired YouTube session reads as an empty library.** `GET /playlists`
-  returns `[]` with a 200, the UI says the account has no playlists, and the
-  dead client stays cached until `POST /auth/status` evicts it — so even
-  fresh credentials are ignored until then. Only the live probe tells.
-
 The tier histogram has run against both real libraries; its results are in
-STATUS.
+STATUS. Two things it surfaced are now settled:
+
+- **Artist order and count do not matter** (owner decision). With the exact
+  title and the length within 2s, any artist in common is strong — YouTube
+  often credits three where Spotify credits one, or the same ones in another
+  order. The reason text still says which kind of agreement it was.
+- **An expired YouTube session is reported as one.** YouTube answers the
+  library read with `[]` and a 200, so the proxy checks an empty library
+  against the live probe and answers 401 when the session is dead; the app
+  says the session expired instead of claiming the account has no
+  playlists. Any failing route now drops the cached client, so fresh
+  credentials are read without a restart. A dead session on a *playlist*
+  read still surfaces as a 502: there the network itself could be down, so
+  a failed probe proves nothing.

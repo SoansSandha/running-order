@@ -15,8 +15,8 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **544 JavaScript tests across
-25 files, all passing** (plus 13 Python tests for the proxy). Build clean,
+All logic layers and all five screens are built. **550 JavaScript tests across
+25 files, all passing** (plus 18 Python tests for the proxy). Build clean,
 design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
@@ -330,9 +330,14 @@ YouTube playlist altogether — the fill half's job in 2c. Nine same-title
 pairs sit beyond 30s and stay unmatched as likely different edits
 (`Kinna Sohna` +206s).
 
-**Open:** whether the same artists credited in a different order should be
-strong (6 likely pairs), and the proxy's handling of an expired YouTube
-session. The rest is in the design's §14.
+Two more came after it, also on the owner's say-so: **artist order and count
+do not matter** for strong — any artist in common, with the exact title and
+the length within 2s — which moved 10 pairs to strong (all correct), giving
+**244 strong, 63 likely**. And **an expired YouTube session is reported as
+one** instead of as an empty library; fresh credentials are picked up without
+a restart (see [proxy/README.md](../proxy/README.md)).
+
+The rest is in the design's §14.
 
 ---
 
