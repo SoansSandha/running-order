@@ -256,21 +256,42 @@ describe('scorePair', () => {
     expect(scorePair(track(), track({ name })).tier).toBe('strong')
   })
 
-  test('a producer credited after a pipe still reaches strong (MixSingh hard constraint)', () => {
-    // Hard constraint: MixSingh is a producer's name, not a mix/remix tag —
-    // the trailing \b is what protects it, and I-4's plural additions must
-    // not weaken that.
+  test('a producer credited after a pipe as one word still reaches strong (MixSingh)', () => {
+    // MixSingh is a producer's name, written this way in the live library.
+    // The trailing \b is what protects it now that "mix" vetoes after a pipe.
     expect(scorePair(track(), track({ name: 'Antidote | MixSingh' })).tier).toBe('strong')
   })
 
-  // I-2: a pipe-chained credit cannot block a legitimate cut, because pipe
-  // segments are only checked against the narrow PIPE_VARIANT_TAIL.
-  test('a spaced producer credit after a pipe still reaches strong', () => {
-    expect(scorePair(track(), track({ name: 'Antidote | Mix Singh' })).tier).toBe('strong')
+  // Owner decision: Spotify is the source of truth, so a pipe segment that
+  // names a variant vetoes the way a bracket does. These words were once left
+  // off the pipe list to protect credits like "| Mix Singh"; the owner chose
+  // the stricter rule, and the live library holds no spaced "Mix Singh".
+  test.each([
+    'Antidote | Live',
+    'Antidote | Remix',
+    'Antidote | Rmx',
+    'Antidote | Trap Mix',
+    'Antidote | Cover',
+    'Antidote | Edit',
+    'Antidote | Punjabi Version',
+    'Antidote | Demo',
+    'Antidote | Reprise',
+    'Antidote | Without Vocals',
+  ])('a variant after a pipe is vetoed when Spotify names none: %s', (name) => {
+    expect(scorePair(track(), track({ name }))).toBeNull()
   })
 
-  test('a later pipe-chained credit does not veto the match', () => {
-    expect(scorePair(track(), track({ name: 'Antidote | Cover Art by X' })).tier).toBe('strong')
+  test.each([
+    ['Antidote - Live', 'Antidote | Live | Karan Aujla'],
+    ['Antidote (Remix)', 'Antidote | Remix'],
+  ])('a variant after a pipe still matches when Spotify names it too: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))?.tier).toBe('strong')
+  })
+
+  test('a vocalist credit after a pipe is not a variant', () => {
+    // "female" and "male" stay bracket-only: a pipe is where uploads credit
+    // their singers this way.
+    expect(scorePair(track(), track({ name: 'Antidote | Female Vocals: Jasmine Sandlas' }))?.tier).toBe('strong')
   })
 
   test('a variant named in the first tail segment still vetoes, even with a credit chain after it', () => {
@@ -330,10 +351,11 @@ describe('scorePair', () => {
     ['Kihnu Yaad Kar Kar Hasdi Live', 'Kihnu Yaad Kar Kar Hasdii Live'],
     // Spelt differently, still the same variant.
     ['Tumse Milke Dilka Jo Haal (Lo-Fi)', 'Tumse Milke Dilka Jo Haal Lofi'],
-    // A pipe credit names no variant here either, exactly as on the lead path.
+    // A vocalist credit after a pipe names no variant here either, exactly as
+    // on the lead path. Measured: dice 0.906.
     [
       'Tujhe Dekha To Yeh Jaana Sanam Pyaar Hota Hai Deewana Sanam',
-      'Tujhe Dekha To Yeh Jaana Sanam Pyaar Hota Hai Deewana Sanamm | Mix Singh',
+      'Tujhe Dekha To Yeh Jaana Sanam Pyaar Hota Hai Deewana Sanamm | Male Vocal',
     ],
   ])('titles that name the same variants are still likely on the dice path: %s / %s', (spotifyName, youtubeName) => {
     expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName })).tier).toBe('likely')
@@ -346,7 +368,7 @@ describe('scorePair', () => {
 
   // C-1: the veto used to exempt a pipe-led tail wholesale, so a single `|`
   // disabled every word in VARIANT_TAIL. Pipe segments are now checked
-  // against PIPE_VARIANT_TAIL, the subset that cannot be part of a name.
+  // against PIPE_VARIANT_TAIL.
   test.each([
     'Antidote | Karaoke',
     'Antidote | Instrumental',
@@ -367,20 +389,7 @@ describe('scorePair', () => {
     expect(scorePair(track(), youtube)).toBeNull()
   })
 
-  test.each([
-    'Antidote | MixSingh',
-    'Antidote | Mix Singh',
-    'Antidote | Cover Art by X',
-  ])('a name-collidable credit after a pipe is NOT vetoed: %s', (name) => {
-    // mix, cover, edit, version, demo, remix and live are deliberately absent
-    // from PIPE_VARIANT_TAIL — these are the credits the pipe exemption
-    // existed to protect, and narrowing the list must not re-break them.
-    expect(scorePair(track(), track({ name })).tier).toBe('strong')
-  })
-
   test('a variant in a parenthesised tail is still vetoed by the full list', () => {
-    // Non-pipe tails keep the wider VARIANT_TAIL: "duet" and "version" are
-    // both in it, and neither is in the pipe subset.
     expect(scorePair(track(), track({ name: 'Antidote (Duet Version 1)' }))).toBeNull()
   })
 

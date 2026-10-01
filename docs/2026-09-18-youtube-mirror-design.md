@@ -392,9 +392,11 @@ that module rather than forking it. What it adds, after an adversarial audit
   variant. Credits, film tags and `(Official Video)` drop out on either side;
   a variant on one side only leaves the two unequal, which is the veto.
 - **Every tail segment is checked**, not just the first, against a variant
-  list. Pipe segments use a narrower list of words that cannot be part of a
-  name, which is why `| Live` and `| Remix` still reach strong (an open owner
-  decision; see §14).
+  list. A pipe segment is checked against the same list less `female` and
+  `male`, which pipes use to credit singers. **Spotify is the source of
+  truth** (owner decision): a variant named after a pipe vetoes unless
+  Spotify's own title names it too. The accepted cost is that a spaced credit
+  such as `| Mix Singh` vetoes as well; one-word `MixSingh` does not.
 - **A sequel marker** opening a segment (`(Part 2)`, ` - Pt. 2`) is a
   different song.
 - **The fuzzy path requires both titles to name the same variants**.
@@ -726,12 +728,9 @@ the user's Spotify account. Both fixed. These four were deferred deliberately:
 
 An adversarial audit of `scorePair` (five attack lenses, every finding
 reproduced and judged independently) confirmed 34 defects with 11 root
-causes. All are fixed or decided. Still open:
+causes. All are fixed or decided, and so is the pipe carve-out the audit
+left parked. Still open:
 
-- **`| Live` and `| Remix` after a pipe reach strong.** The pipe list leaves
-  out name-collidable words (mix, live, remix, cover, edit, version, demo) to
-  protect real credits like `| Mix Singh`. Whether live and remix move into it
-  is an owner decision; `Rmx` waits on the same one.
 - **The audit was not exhausted.** It stopped at its three-round cap while
   round three still confirmed new defects.
 - **The variant list now guards both sides.** Since both titles are reduced,

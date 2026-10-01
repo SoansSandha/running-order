@@ -39,8 +39,7 @@ export const FUZZY_FLOOR = 0.9
  * "Reverbed"), and boost its bare form ("Bass Boost").
  *
  * A bare mood or voice tag ("(Sad)", "(Female)", "(Male)") names a recording
- * sung again, as "(Female Version)" already did through "version". These stay
- * out of the pipe list: a pipe segment is where "Female Vocals: X" credits go.
+ * sung again, as "(Female Version)" already did through "version".
  *
  * Spatial-audio re-uploads come in every numeral (3D, 9D, 16D...), but the
  * numeral form is tied to the word "audio" except for the two common bare
@@ -65,7 +64,9 @@ export const VARIANT_TAIL =
   /\b(live|remix(?:e[sd])?|rmx|version(?:s)?|acoustic|unplugged|slowed|reverb(?:ed)?|cover(?:s)?|instrumental|inst|duet|mix(?:es)?|edit(?:s)?|reprised?|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boost(?:ed)?|extended|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|lo[\s-]?fi|sped[\s-]?up|a[\s-]?cappella|acapella|minus[\s-]?one|without[\s-]?vocals?|sad|female|male)\b/i
 
 /**
- * The subset of VARIANT_TAIL that is safe to apply to a PIPE segment (C-1).
+ * What a PIPE segment is checked against (C-1): every word of VARIANT_TAIL
+ * except "female" and "male", which a pipe is where uploads credit their
+ * singers ("| Female Vocals: X").
  *
  * A pipe segment is usually a credit — a channel, a featured artist, a
  * producer, a "Latest Punjabi Songs 2025" tag. But `SONG | ARTIST | BASS
@@ -73,16 +74,19 @@ export const VARIANT_TAIL =
  * name a different recording, and a blanket exemption for pipes turned every
  * word above into a no-op behind a single `|`.
  *
- * So pipes are checked, just against a narrower list: only words that cannot
- * plausibly be part of a person's or a channel's name. The name-collidable
- * members are DELIBERATELY absent — mix, edit, version, cover, demo, remix and
- * live are exactly the words that show up in real credits ("MixSingh",
- * "Mix Singh", "Cover Art by X"), and vetoing on those is what the pipe
- * exemption was originally added to stop. Losing `| Live` and `| Remix` to
- * that carve-out is the accepted cost of not re-breaking those credits.
+ * Owner decision: Spotify is the source of truth, so a variant named after a
+ * pipe vetoes the way a bracket does — unless Spotify's own title names the
+ * same variant, which essentialTitle keeps on both sides. This list used to
+ * leave out mix, edit, version, cover, demo, remix and live to protect
+ * credits that contain them; that let `| Live` and `| Remix` reach strong.
+ * The accepted cost is that a spaced credit such as "| Mix Singh" or "| Cover
+ * Art by X" now vetoes too. "MixSingh" as one word still passes, because of
+ * the trailing \b. Measured on the live library: of 60 pipe segments, this
+ * vetoes two more, both genuine variants ("| Hip Hop/Trap Mix", "| Remix
+ * #instagram"), and the library holds no spaced "Mix Singh".
  */
 export const PIPE_VARIANT_TAIL =
-  /\b(karaoke|instrumental|bass[\s-]?boost(?:ed)?|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|nightcore|slowed|reverb(?:ed)?|sped[\s-]?up|lo[\s-]?fi|unplugged|a[\s-]?cappella|acapella|acoustic|extended|mashup|medley)\b/i
+  /\b(live|remix(?:e[sd])?|rmx|version(?:s)?|acoustic|unplugged|slowed|reverb(?:ed)?|cover(?:s)?|instrumental|inst|duet|mix(?:es)?|edit(?:s)?|reprised?|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boost(?:ed)?|extended|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|lo[\s-]?fi|sped[\s-]?up|a[\s-]?cappella|acapella|minus[\s-]?one|without[\s-]?vocals?|sad)\b/i
 
 /**
  * A tail segment that OPENS with a sequel marker — "(Part 2)", " - Pt. 2",
@@ -143,10 +147,10 @@ function tailSegments(tail) {
  *   "Latest Punjabi Songs 2025" tag — but NOT always: `SONG | ARTIST | BASS
  *   BOOSTED | TAG` is the same upload convention, and exempting pipes
  *   wholesale (as this function used to) silently disabled the entire veto
- *   behind one pipe character. So every pipe segment is checked, against the
- *   narrower PIPE_VARIANT_TAIL, which holds only words that cannot be part of
- *   someone's name. That is what keeps "Antidote | Mix Singh" matching while
- *   "Antidote | Karaoke" is vetoed.
+ *   behind one pipe character. So every pipe segment is checked, against
+ *   PIPE_VARIANT_TAIL: the full list less the two words pipe credits use for
+ *   singers, so "Antidote | Female Vocals: X" still matches while "Antidote |
+ *   Karaoke" is vetoed.
  * - Under either separator, a segment that opens with a sequel marker is a
  *   different song (SEQUEL_SEGMENT).
  */
@@ -174,8 +178,8 @@ function vetoListFor(separator) {
  *
  * The base is read against the full list, which is how a bare suffix with no
  * separator at all ("Kihnu Yaad Kar Kar Hasdi Live") is seen. Tail segments
- * are read by the same per-separator rule as tailNamesVariant, so a pipe
- * credit like "| Mix Singh" names nothing here either.
+ * are read by the same per-separator rule as tailNamesVariant, so a singer
+ * credit like "| Male Vocal" names nothing here either.
  */
 function namedVariants(title) {
   const text = String(title ?? '')

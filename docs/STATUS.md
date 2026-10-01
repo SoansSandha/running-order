@@ -15,7 +15,7 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **518 JavaScript tests across
+All logic layers and all five screens are built. **526 JavaScript tests across
 25 files, all passing** (plus 13 Python tests for the proxy). Build clean,
 design detector clean, working tree clean.
 
@@ -284,16 +284,19 @@ decided, one commit per root cause, each test written and seen failing first.
 | 10. Stage-name aliases | Fixed — a seeded alias map |
 | 11. Non-Latin titles folded to nothing | Fixed, plus a wrong strong it hid: mixed-script titles kept only their Latin words |
 
-Also added on the owner's say-so: bare `(Sad)`, `(Female)` and `(Male)` tags.
+Also added on the owner's say-so: bare `(Sad)`, `(Female)` and `(Male)` tags,
+and the end of the pipe carve-out. Spotify is the source of truth, so a
+variant after a pipe (`| Live`, `| Remix`, `| Trap Mix`) now vetoes unless
+Spotify's own title names it too. The accepted cost is that a spaced credit
+such as `| Mix Singh` vetoes as well; the live library holds none.
 
 **Measured on the real 385-track YouTube library:** 8 tracks that could never
 match now match strong (5 joined bylines, 3 artist-first titles), and none of
 the 147,840 ordered pairs of *different* tracks changes tier.
 
-**Open:** whether `| Live` / `| Remix` after a pipe should veto (owner
-decision), and the tier histogram against a real Spotify library — the plan's
-own gate before any confirmation UI, waiting on an Exportify CSV. The rest is
-in the design's §14.
+**Open:** the tier histogram against a real Spotify library — the plan's own
+gate before any confirmation UI, waiting on an Exportify CSV. The rest is in
+the design's §14.
 
 ---
 
