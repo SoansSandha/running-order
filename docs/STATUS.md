@@ -15,7 +15,7 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **526 JavaScript tests across
+All logic layers and all five screens are built. **544 JavaScript tests across
 25 files, all passing** (plus 13 Python tests for the proxy). Build clean,
 design detector clean, working tree clean.
 
@@ -294,9 +294,45 @@ such as `| Mix Singh` vetoes as well; the live library holds none.
 match now match strong (5 joined bylines, 3 artist-first titles), and none of
 the 147,840 ordered pairs of *different* tracks changes tier.
 
-**Open:** the tier histogram against a real Spotify library — the plan's own
-gate before any confirmation UI, waiting on an Exportify CSV. The rest is in
-the design's §14.
+### The tier gate, run against both real libraries (2026-09-30)
+
+The plan's own gate before any confirmation UI. Spotify "Punjabi Songs" (418
+tracks, exported through the app itself — Exportify crashes on a `null`
+saved album) against YouTube "punjabi songs" (385 readable of 389):
+
+| | Before the audit | After the audit | Now |
+|---|---|---|---|
+| Strong | 221 | 234 | **234** |
+| Likely | 33 | 34 | **73** |
+| Spotify unmatched | 164 | 150 | **111** |
+| YouTube unmatched | 131 | 117 | **78** |
+
+**No wrong pair was found.** Every likely pair, and every strong pair whose
+titles were not identical, was checked by hand; the rest are an identical
+title, the same primary artist and within 2s.
+
+The "after the audit" column showed what was left, and four rules came from
+it, on the owner's say-so:
+
+- **A music video gets a 30s length window**, either way, as likely only.
+  Intros, pauses and end credits had kept 40 of 132 official music videos
+  unmatched under 5s. 107 of 132 now pair.
+- **A spelling variant is accepted when the lengths agree** within 3s
+  (`Maar Sutya` / `Maar Sutiya`), as likely only.
+- **A fuzzy title must carry the same numbers**, so `Mai Tere Ishq Mein 2.0`,
+  `Akhiyan Udeekdian 2.0` and `Don't Look 2` never meet their originals.
+- **A Spotify local file is read as the user's own tags**: its artist field
+  is split like a byline (`Alfaaz; Yo Yo Honey Singh`) and its length may sit
+  10s out.
+
+What is left unmatched on the Spotify side is overwhelmingly absent from the
+YouTube playlist altogether — the fill half's job in 2c. Nine same-title
+pairs sit beyond 30s and stay unmatched as likely different edits
+(`Kinna Sohna` +206s).
+
+**Open:** whether the same artists credited in a different order should be
+strong (6 likely pairs), and the proxy's handling of an expired YouTube
+session. The rest is in the design's §14.
 
 ---
 

@@ -407,6 +407,14 @@ that module rather than forking it. What it adds, after an adversarial audit
   marks; `matchText` alone erased them.
 - **An artist named only in the title is not artist evidence** (owner
   decision): label-channel uploads stay unproposed.
+- **Length windows depend on what each side is.** Catalogue audio must agree
+  within 5s. A YouTube music video (OMV, UGC, or an untyped row with no
+  album) may sit 30s out, for its intro, pauses and end credits. A Spotify
+  local file may sit 10s out, its length being the user's own copy. Beyond
+  2s it is only ever likely.
+- **A spelling variant is accepted when the lengths agree** within 3s
+  (`Maar Sutya` / `Maar Sutiya`), and a fuzzy title must carry the same
+  numbers (`… 2.0` is a different song).
 
 **Nothing below Certain is ever applied without confirmation** (D15).
 
@@ -742,6 +750,15 @@ left parked. Still open:
   Kahlon` and `Shinda Kahlon` are three artists.
 - **A transliterated title never meets its native-script form**
   (`Tum Hi Ho` / `तुम ही हो`). Identical native-script titles now match.
-- **The tier histogram against a real Spotify library has not run.** It is
-  this plan's own gate before any confirmation UI, and needs an Exportify CSV
-  of the matching Spotify playlist.
+- **The same artists credited in a different order are only likely.**
+  Spotify lists `Tegi Pannu, Sukha, Manni Sandhu`, YouTube `Sukha, Manni
+  Sandhu, Tegi Pannu`: six such pairs in the live libraries, all correct.
+  Whether an identical artist set should count as a primary match is an
+  owner decision.
+- **An expired YouTube session reads as an empty library.** `GET /playlists`
+  returns `[]` with a 200, the UI says the account has no playlists, and the
+  dead client stays cached until `POST /auth/status` evicts it — so even
+  fresh credentials are ignored until then. Only the live probe tells.
+
+The tier histogram has run against both real libraries; its results are in
+STATUS.
