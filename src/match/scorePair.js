@@ -38,6 +38,10 @@ export const FUZZY_FLOOR = 0.9
  * remix, reverb and reprise also match their past tense ("Remixed by X",
  * "Reverbed"), and boost its bare form ("Bass Boost").
  *
+ * A bare mood or voice tag ("(Sad)", "(Female)", "(Male)") names a recording
+ * sung again, as "(Female Version)" already did through "version". These stay
+ * out of the pipe list: a pipe segment is where "Female Vocals: X" credits go.
+ *
  * Spatial-audio re-uploads come in every numeral (3D, 9D, 16D...), but the
  * numeral form is tied to the word "audio" except for the two common bare
  * tags, 8D and 16D. A bare numeral-D would veto "(2D Animated Video)" and
@@ -58,7 +62,7 @@ export const FUZZY_FLOOR = 0.9
  * which is why both are exported: that test reads their sources.
  */
 export const VARIANT_TAIL =
-  /\b(live|remix(?:e[sd])?|rmx|version(?:s)?|acoustic|unplugged|slowed|reverb(?:ed)?|cover(?:s)?|instrumental|inst|duet|mix(?:es)?|edit(?:s)?|reprised?|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boost(?:ed)?|extended|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|lo[\s-]?fi|sped[\s-]?up|a[\s-]?cappella|acapella|minus[\s-]?one|without[\s-]?vocals?)\b/i
+  /\b(live|remix(?:e[sd])?|rmx|version(?:s)?|acoustic|unplugged|slowed|reverb(?:ed)?|cover(?:s)?|instrumental|inst|duet|mix(?:es)?|edit(?:s)?|reprised?|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boost(?:ed)?|extended|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|lo[\s-]?fi|sped[\s-]?up|a[\s-]?cappella|acapella|minus[\s-]?one|without[\s-]?vocals?|sad|female|male)\b/i
 
 /**
  * The subset of VARIANT_TAIL that is safe to apply to a PIPE segment (C-1).

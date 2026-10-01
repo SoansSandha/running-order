@@ -207,6 +207,15 @@ describe('scorePair', () => {
     expect(scorePair(track(), track({ name: `Antidote ${tail}` }))).toBeNull()
   })
 
+  // A bare mood or voice tag names a different recording too: a sad or a
+  // female version is sung again, not decorated. Since both titles are
+  // reduced the same way (root cause 7), a missing word here lets the tag
+  // through from EITHER side, so both directions are pinned.
+  test.each(['(Sad)', '(Female)', '(Male)'])('a bare %s tag is a different recording, on either side', (tag) => {
+    expect(scorePair(track(), track({ name: `Antidote ${tag}` }))).toBeNull()
+    expect(scorePair(track({ name: `Antidote ${tag}` }), track())).toBeNull()
+  })
+
   test.each([
     'Antidote | 16D Audio',
     'Antidote | Bass Boost',
