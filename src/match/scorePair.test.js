@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'vitest'
 import { diceCoefficient, matchText } from '../csv/match.js'
-import { FUZZY_FLOOR, MAX_DRIFT_MS, STRONG_DRIFT_MS, scorePair } from './scorePair.js'
+import {
+  FUZZY_FLOOR,
+  MAX_DRIFT_MS,
+  PIPE_VARIANT_TAIL,
+  STRONG_DRIFT_MS,
+  VARIANT_TAIL,
+  scorePair,
+} from './scorePair.js'
 
 const track = (over = {}) => ({
   name: 'Antidote',
@@ -10,6 +17,41 @@ const track = (over = {}) => ({
   videoType: null,
   ...over,
 })
+
+/**
+ * Split `\b(a|b|c)\b` into its top-level alternatives.
+ *
+ * Both veto patterns are written in exactly that shape, so the alternatives
+ * can be compared directly instead of guessing at sample strings for each
+ * one. `assertSplittable` below is what keeps that assumption honest.
+ */
+const alternatives = (pattern) => {
+  const body = pattern.source.replace(/^\\b\(/, '').replace(/\)\\b$/, '')
+  expect(body, 'pattern is not in the \\b(...)\\b shape this split assumes').not.toBe(pattern.source)
+  return body.split('|')
+}
+
+/**
+ * A `|` inside a group or a character class would make the naive split above
+ * wrong, and it would show up as an alternative with unbalanced brackets.
+ */
+const isBalanced = (token) => {
+  let parens = 0
+  let classes = 0
+  for (let i = 0; i < token.length; i++) {
+    const char = token[i]
+    if (char === '\\') {
+      i += 1
+      continue
+    }
+    if (char === '(') parens += 1
+    else if (char === ')') parens -= 1
+    else if (char === '[') classes += 1
+    else if (char === ']') classes -= 1
+    if (parens < 0 || classes < 0) return false
+  }
+  return parens === 0 && classes === 0
+}
 
 describe('scorePair', () => {
   test('exact title and artist within 2s is strong', () => {
@@ -244,6 +286,41 @@ describe('scorePair', () => {
     const spotify = track({ name: 'C4', artists, primaryArtist: artists[0] })
     const youtube = track({ name: 'C4 - HARKIRAT SANGHA | STARBOY X', artists, primaryArtist: artists[0] })
     expect(scorePair(spotify, youtube).tier).toBe('strong')
+  })
+
+  // The two veto lists once had INVERTED strictness: a parenthesised tag is
+  // the more canonical way to mark a variant, yet '(Acapella)',
+  // '(Bassboosted)' and '(8-D Audio)' all reached strong while their piped
+  // forms were correctly vetoed. The looser list was guarding the safer
+  // position.
+  test('a variant word strict enough for a pipe segment always vetoes a tag too', () => {
+    const pipe = alternatives(PIPE_VARIANT_TAIL)
+    const full = alternatives(VARIANT_TAIL)
+
+    // Guard the split itself, so this cannot pass vacuously or on a
+    // mis-parsed pattern.
+    expect(pipe.length).toBeGreaterThan(0)
+    expect(full.length).toBeGreaterThan(pipe.length)
+    expect(pipe.filter((word) => !isBalanced(word))).toEqual([])
+    expect(full.filter((word) => !isBalanced(word))).toEqual([])
+
+    // The invariant. Derived from the patterns, so adding a word to the pipe
+    // list and forgetting the full one fails here by name.
+    expect(pipe.filter((word) => !full.includes(word))).toEqual([])
+  })
+
+  test.each([
+    'Acapella',
+    'A Cappella',
+    'Acappella',
+    'Bassboosted',
+    '8-D Audio',
+    '8 D Audio',
+  ])('a parenthesised %s is vetoed, the same as its piped form', (word) => {
+    // The six spellings that were actually inverted. The spaced forms
+    // ('Bass Boosted', '8D Audio') were already covered by the full list.
+    expect(scorePair(track(), track({ name: `Antidote (${word})` }))).toBeNull()
+    expect(scorePair(track(), track({ name: `Antidote | ${word}` }))).toBeNull()
   })
 
   // I-2: artist names fold with sortKey LAYERED OVER matchText. Each helper

@@ -35,9 +35,19 @@ export const FUZZY_FLOOR = 0.9
  * refuse to cut a title that is only wearing credits. The members that
  * naturally inflect (remix, version, mix, edit, cover) also match their
  * plural, so "Alternate Versions" vetoes the same as "Alternate Version".
+ *
+ * INVARIANT: this list is a strict SUPERSET of PIPE_VARIANT_TAIL, token for
+ * token. A parenthesised tag is the MORE canonical way to mark a variant, so
+ * anything strict enough to veto a pipe segment — where credits live, and
+ * where we have to be cautious — is certainly strict enough to veto a tag.
+ * The two lists had that backwards once: `(Acapella)`, `(Bassboosted)` and
+ * `(8-D Audio)` all reached strong while their piped forms were vetoed.
+ * `a variant word strict enough for a pipe segment always vetoes a tag too`
+ * derives the check from these two patterns and fails if it ever drifts —
+ * which is why both are exported: that test reads their sources.
  */
-const VARIANT_TAIL =
-  /\b(live|remix(?:es)?|version(?:s)?|acoustic|unplugged|slowed|reverb|cover(?:s)?|instrumental|duet|mix(?:es)?|edit(?:s)?|reprise|demo|karaoke|mashup|medley|nightcore|boosted|extended|8d|lo-?fi|sped[\s-]?up)\b/i
+export const VARIANT_TAIL =
+  /\b(live|remix(?:es)?|version(?:s)?|acoustic|unplugged|slowed|reverb|cover(?:s)?|instrumental|duet|mix(?:es)?|edit(?:s)?|reprise|demo|karaoke|mashup|medley|nightcore|boosted|bass[\s-]?boosted|extended|8[\s-]?d|lo-?fi|sped[\s-]?up|a[\s-]?cappella|acapella)\b/i
 
 /**
  * The subset of VARIANT_TAIL that is safe to apply to a PIPE segment (C-1).
@@ -56,7 +66,7 @@ const VARIANT_TAIL =
  * exemption was originally added to stop. Losing `| Live` and `| Remix` to
  * that carve-out is the accepted cost of not re-breaking those credits.
  */
-const PIPE_VARIANT_TAIL =
+export const PIPE_VARIANT_TAIL =
   /\b(karaoke|instrumental|bass[\s-]?boosted|8[\s-]?d|nightcore|slowed|reverb|sped[\s-]?up|lo-?fi|unplugged|a[\s-]?cappella|acapella|acoustic|extended|mashup|medley)\b/i
 
 /** Where YouTube starts appending credits, tags and release years. */
