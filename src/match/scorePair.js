@@ -239,10 +239,23 @@ function sameVariants(a, b) {
  * either: "Kahlon", "Savi Kahlon" and "Shinda Kahlon" are three artists.
  */
 function foldArtist(name) {
-  return sortKey(matchText(name)).replace(HONORIFIC, '').replace(/ /g, '')
+  const folded = sortKey(matchText(name)).replace(HONORIFIC, '').replace(/ /g, '')
+  return ARTIST_ALIASES.get(folded) ?? folded
 }
 
 const HONORIFIC = /^(?:ustad|pandit|pt) (?=\S)/
+
+/**
+ * Stage names spelt two ways (audit root cause 10), keyed and valued as
+ * foldArtist folds them. Seeded ONLY from names a real library credits both
+ * ways — no general rule can tell "Honey Singh" from "Yo Yo Honey Singh"
+ * without also merging "Kahlon" into "Shinda Kahlon". Add a pair when a
+ * library shows one.
+ */
+const ARTIST_ALIASES = new Map([
+  // The live library credits both.
+  ['yoyohoneysingh', 'honeysingh'],
+])
 
 /**
  * A title reduced to what identifies the RECORDING, folded: its lead plus

@@ -586,6 +586,15 @@ describe('scorePair', () => {
     expect(scorePair(track(credits(spotifyName)), track(credits(youtubeName)))?.tier).toBe('strong')
   })
 
+  // Audit root cause 10: a stage name spelt two ways. The live library credits
+  // both 'Yo Yo Honey Singh' and 'Honey Singh'.
+  test.each([
+    ['Yo Yo Honey Singh', 'Honey Singh'],
+    ['Honey Singh', 'YO YO HONEY SINGH'],
+  ])('a known stage-name alias %s / %s still matches strong', (spotifyName, youtubeName) => {
+    expect(scorePair(track(credits(spotifyName)), track(credits(youtubeName)))?.tier).toBe('strong')
+  })
+
   test.each([
     // 'Dr' is part of a stage name, not an honorific: the live library
     // credits 'Dr. Zeus'.
