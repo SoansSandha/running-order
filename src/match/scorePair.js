@@ -484,6 +484,14 @@ export function scorePair(spotify, youtube) {
 
   // M1: a title agreement alone is not evidence. Two different songs share a
   // title far more often than the same song changes its artist.
+  //
+  // Owner decision (audit root cause 8): an artist named only in the TITLE is
+  // not artist evidence either. A label-channel upload credited to the label
+  // ("No Need (Full Video) Karan Aujla | ..." by Rehaan Records) stays
+  // unproposed — the artist is nearly always in the real upload's own artist
+  // tags — and the same rule keeps out the titles that name an artist
+  // precisely because they are not by them ("Antidote - Tribute to Karan
+  // Aujla").
   if (!primaryExact && !sharesAnArtist(spotify, youtube)) return null
 
   // Cutting decoration loses nothing, so a lead match is as good as an exact

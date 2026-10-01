@@ -381,10 +381,30 @@ audio track wins. It is a tie-breaker only — never a reason to promote or
 reject a candidate on its own, because a legitimate match is sometimes only
 available as a video.
 
-Title folding reuses `csv/match.js`'s `matchText` unchanged: `(feat. X)` and
+Title folding starts from `csv/match.js`'s `matchText`: `(feat. X)` and
 remaster tags dropped, `(Live)` and `(Remix)` kept. Cross-service matching is
-a harder instance of the same problem, so this extends that module rather
-than forking it.
+a harder instance of the same problem, so `src/match/scorePair.js` builds on
+that module rather than forking it. What it adds, after an adversarial audit
+(2026-09-30) found 34 defects across 11 root causes:
+
+- **Both titles are reduced the same way** before comparing: the lead, read
+  past a leading artist credit, plus every tail segment that names a
+  variant. Credits, film tags and `(Official Video)` drop out on either side;
+  a variant on one side only leaves the two unequal, which is the veto.
+- **Every tail segment is checked**, not just the first, against a variant
+  list. Pipe segments use a narrower list of words that cannot be part of a
+  name, which is why `| Live` and `| Remix` still reach strong (an open owner
+  decision; see §14).
+- **A sequel marker** opening a segment (`(Part 2)`, ` - Pt. 2`) is a
+  different song.
+- **The fuzzy path requires both titles to name the same variants**.
+- **A joined YouTube byline** (`AP Dhillon & Amari`) also counts as each
+  artist in it. Artist names ignore spacing, a leading ustad, pandit or pt.,
+  and one seeded stage-name alias.
+- **Titles and artists in any script** fold keeping their own letters and
+  marks; `matchText` alone erased them.
+- **An artist named only in the title is not artist evidence** (owner
+  decision): label-channel uploads stay unproposed.
 
 **Nothing below Certain is ever applied without confirmation** (D15).
 
@@ -701,3 +721,28 @@ the user's Spotify account. Both fixed. These four were deferred deliberately:
 - **`csv/detectColumns.js` and `csv/match.js` still hardcode Spotify URI
   patterns** (§4 named this). The mirror path does not need them, so it stays
   out of scope — but CSV-driven ordering of a YouTube playlist would.
+
+### Carried forward from the matcher branch (2026-09-30)
+
+An adversarial audit of `scorePair` (five attack lenses, every finding
+reproduced and judged independently) confirmed 34 defects with 11 root
+causes. All are fixed or decided. Still open:
+
+- **`| Live` and `| Remix` after a pipe reach strong.** The pipe list leaves
+  out name-collidable words (mix, live, remix, cover, edit, version, demo) to
+  protect real credits like `| Mix Singh`. Whether live and remix move into it
+  is an owner decision; `Rmx` waits on the same one.
+- **The audit was not exhausted.** It stopped at its three-round cap while
+  round three still confirmed new defects.
+- **The variant list now guards both sides.** Since both titles are reduced,
+  a missing word lets its tag through from Spotify's side as well as
+  YouTube's. Tribute, clean, censored, vocals only, jhankar beats and refix
+  remain deliberately absent.
+- **The alias map needs feeding.** It holds one pair, seeded from names the
+  live library credits both ways. A general rule cannot work: `Kahlon`, `Savi
+  Kahlon` and `Shinda Kahlon` are three artists.
+- **A transliterated title never meets its native-script form**
+  (`Tum Hi Ho` / `तुम ही हो`). Identical native-script titles now match.
+- **The tier histogram against a real Spotify library has not run.** It is
+  this plan's own gate before any confirmation UI, and needs an Exportify CSV
+  of the matching Spotify playlist.

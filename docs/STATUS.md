@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-24 · **HEAD:** `see git log`
+**Last updated:** 2026-09-30 · **HEAD:** `see git log`
 
 Design and decisions: [2026-09-09-design.md](2026-09-09-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -15,8 +15,8 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **323 JavaScript tests across
-21 files, all passing** (plus 12 Python tests for the proxy). Build clean,
+All logic layers and all five screens are built. **518 JavaScript tests across
+25 files, all passing** (plus 13 Python tests for the proxy). Build clean,
 design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
@@ -254,6 +254,46 @@ password; it is not in the repository and must never be.
   this by calling `buildMoveOps`. Task 6's adapter also drops rows with a
   null `setVideoId` at the boundary, so the check is defence in depth rather
   than the only guard.
+
+---
+
+## YouTube Music: 2b matcher, audited
+
+Branch `youtube-matching-2b`. Plan:
+[cross-service matcher](superpowers/plans/2026-09-28-cross-service-matcher.md).
+`src/match/scorePair.js` judges one Spotify/YouTube pair; `pairTracks.js`
+claims pairs greedily across two playlists. No UI yet.
+
+An adversarial audit on 2026-09-30 attacked `scorePair` from five angles and
+had every finding reproduced and judged by two independent agents. It
+confirmed **34 defects with 11 root causes**, 8 of them strong matches that
+"Confirm all" would have applied unreviewed. Every one is now fixed or
+decided, one commit per root cause, each test written and seen failing first.
+
+| Root cause | Outcome |
+|---|---|
+| 1. Only the first bracket was checked for a variant | Fixed |
+| 2. Variant spellings missed (16D Audio, Bass Boost, Remixed…) | Fixed |
+| 3. Sequel markers treated as decoration | Fixed — owner: a sequel is a different song |
+| 4. Fuzzy path checked YouTube's tail only | Fixed |
+| 5. Joined YouTube bylines never split | Fixed |
+| 6. Artist-first titles refused instead of read past | Fixed |
+| 7. Decoration cut from YouTube's title only | Fixed |
+| 8. Artist named only in the title | **Declined** — owner: the artist tags must agree |
+| 9. Spacing and honorifics in artist names | Fixed — ustad, pandit, pt. only |
+| 10. Stage-name aliases | Fixed — a seeded alias map |
+| 11. Non-Latin titles folded to nothing | Fixed, plus a wrong strong it hid: mixed-script titles kept only their Latin words |
+
+Also added on the owner's say-so: bare `(Sad)`, `(Female)` and `(Male)` tags.
+
+**Measured on the real 385-track YouTube library:** 8 tracks that could never
+match now match strong (5 joined bylines, 3 artist-first titles), and none of
+the 147,840 ordered pairs of *different* tracks changes tier.
+
+**Open:** whether `| Live` / `| Remix` after a pipe should veto (owner
+decision), and the tier histogram against a real Spotify library — the plan's
+own gate before any confirmation UI, waiting on an Exportify CSV. The rest is
+in the design's §14.
 
 ---
 
