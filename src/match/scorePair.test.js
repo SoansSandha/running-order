@@ -395,6 +395,48 @@ describe('scorePair', () => {
     expect(scorePair(spotify, youtube).tier).toBe('strong')
   })
 
+  // Audit root cause 6: I-1 REFUSED an artist lead instead of reading past it
+  // to the song, which lost every artist-first upload. Each YouTube title
+  // here is verbatim from the live library.
+  test.each([
+    ['Vanilla', 'Diljit Dosanjh - VANILLA (Visualiser) | Drive Thru'],
+    ['Ghost', 'Diljit Dosanjh | Ghost (Official Video) | Born To Shine Tour | Australia | Thiarajxtt'],
+    ['Caviar', 'Diljit Dosanjh: Caviar (Official Music Video) Intense | Raj Ranjodh | Drive Thru'],
+  ])('an artist-first title is read past the artist to the song: %s', (spotifyName, youtubeName) => {
+    const diljit = credits('Diljit Dosanjh')
+    expect(scorePair(track({ name: spotifyName, ...diljit }), track({ name: youtubeName, ...diljit }))?.tier).toBe('strong')
+  })
+
+  test('an artist-first title is read past an artist credited second, too', () => {
+    // The lead is checked against every credited artist, not only the
+    // primary: here YouTube credits the producer first. Likely, not strong,
+    // because the primary artists differ (M1).
+    const spotify = track({ name: 'Excuses', ...credits('AP Dhillon') })
+    const youtube = track({ name: 'AP Dhillon - Excuses (Official Video)', ...credits('Intense', 'AP Dhillon') })
+    expect(scorePair(spotify, youtube)?.tier).toBe('likely')
+  })
+
+  test.each([
+    'Diljit Dosanjh - Vanilla (Remix)',
+    'Diljit Dosanjh: Vanilla (Remix)',
+  ])('a variant after the song in an artist-first title still vetoes: %s', (name) => {
+    const diljit = credits('Diljit Dosanjh')
+    expect(scorePair(track({ name: 'Vanilla', ...diljit }), track({ name, ...diljit }))).toBeNull()
+  })
+
+  test('a colon with no space before it is only a cut after a credited artist', () => {
+    // Anywhere else it is part of the title. A general colon cut reads this
+    // as 'Mission' and matches a different song of that name.
+    expect(scorePair(track({ name: 'Mission' }), track({ name: 'Mission: Impossible' }))).toBeNull()
+  })
+
+  test('an artist-first title whose next part is another artist is still refused', () => {
+    // 'Ikky - Karan Aujla' is two credits, not a song called 'Karan Aujla'.
+    const spotify = track({ name: 'Karan Aujla', ...credits('Karan Aujla') })
+    const youtube = track({ name: 'Ikky - Karan Aujla (Official Video)', ...credits('Ikky', 'Karan Aujla') })
+    expect(scorePair(spotify, youtube)).toBeNull()
+  })
+
   // The two veto lists once had INVERTED strictness: a parenthesised tag is
   // the more canonical way to mark a variant, yet '(Acapella)',
   // '(Bassboosted)' and '(8-D Audio)' all reached strong while their piped

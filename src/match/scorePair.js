@@ -235,24 +235,52 @@ function foldArtist(name) {
  * title, and self-titled tracks and intros are common enough that the
  * fragment then fold-equals a real Spotify title — with the artist gate
  * passing trivially, because YouTube does credit that artist. So a lead that
- * is just the uploading artist's name is refused. There is deliberately no
- * minimum length instead: "C4", "Magic" and "Snap" are all real titles in the
- * live library and a length floor would drop them.
+ * is just an artist's name is never treated as the title. There is
+ * deliberately no minimum length instead: "C4", "Magic" and "Snap" are all
+ * real titles in the live library and a length floor would drop them.
+ *
+ * Audit root cause 6: REFUSING such a lead lost every artist-first upload
+ * ("Diljit Dosanjh - VANILLA (Visualiser) | Drive Thru"). So when the lead is
+ * any credited artist, not only the primary, the title is read from what
+ * follows instead, and refused only if that is an artist too.
  *
  * @param {string} title
- * @param {string} [primaryArtistName] the YouTube side's primary artist
+ * @param {Set<string>} credited the YouTube side's artist names, folded
  */
-export function leadingSegment(title, primaryArtistName) {
+export function leadingSegment(title, credited) {
   const text = String(title ?? '')
-  const cut = text.search(TAIL_START)
-  if (cut === -1) return null
-  if (tailNamesVariant(title)) return null
 
-  const lead = text.slice(0, cut).trim()
+  const colon = ARTIST_COLON.exec(text)
+  if (colon && credited.has(foldArtist(colon[1]))) return titleAfterArtist(text.slice(colon[0].length), credited)
+
+  const tail = TAIL_START.exec(text)
+  if (!tail) return null
+  const lead = text.slice(0, tail.index).trim()
   if (!lead) return null
-  const leadKey = foldArtist(lead)
-  if (leadKey !== '' && leadKey === foldArtist(primaryArtistName)) return null
-  return lead
+
+  if (credited.has(foldArtist(lead))) return titleAfterArtist(text.slice(tail.index + tail[0].length), credited)
+  return tailNamesVariant(text) ? null : lead
+}
+
+/**
+ * "Diljit Dosanjh: Caviar" puts no space before its colon, so TAIL_START never
+ * sees it. A colon like that is a cut only when what precedes it is a
+ * credited artist; anywhere else it belongs to the title ("Mission:
+ * Impossible", "9:45").
+ */
+const ARTIST_COLON = /^([^:]+):\s/
+
+/**
+ * The title in what follows an artist credit, or null when there is none.
+ * Only this part's own tail is checked for a variant: the song title itself
+ * now sits in the WHOLE title's tail, and a title word like "Live" in "Live
+ * Forever" must not veto it.
+ */
+function titleAfterArtist(rest, credited) {
+  if (tailNamesVariant(rest)) return null
+  const cut = rest.search(TAIL_START)
+  const lead = (cut === -1 ? rest : rest.slice(0, cut)).trim()
+  return lead && !credited.has(foldArtist(lead)) ? lead : null
 }
 
 /** Album audio beats a music video beats a user upload, on a tie only (M3). */
@@ -344,7 +372,7 @@ export function scorePair(spotify, youtube) {
 
   const titleExact = spotifyTitle === youtubeTitle
   // M5: the same title wearing YouTube's credits is still the same title.
-  const leadFolded = matchText(leadingSegment(youtube?.name, youtube?.primaryArtist?.name))
+  const leadFolded = matchText(leadingSegment(youtube?.name, new Set(youtubeNames(youtube))))
   const titleViaLead = !titleExact && leadFolded !== '' && spotifyTitle === leadFolded
   // M6 applies to the dice path too (I-3): bigram Dice is length-forgiving,
   // so a long enough title still clears the floor with a variant tag still
