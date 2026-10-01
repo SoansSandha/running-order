@@ -158,3 +158,50 @@ def test_playlist_route_failure_becomes_a_clean_http_error(client, monkeypatch):
     response = client.get("/playlists/PL1")
     assert response.status_code == 502
     assert "top secret cookie" not in response.text
+
+
+class DeadSessionYT:
+    """What an expired browser session measurably does: the library read
+    succeeds and comes back empty, and an authenticated read raises."""
+
+    def __init__(self, message="session dead — leaky detail, must never reach a response"):
+        self._message = message
+
+    def get_library_playlists(self, limit=None):
+        return []
+
+    def get_playlist(self, playlistId, limit=None):
+        raise RuntimeError(self._message)
+
+
+def test_an_empty_library_on_a_dead_session_is_reported_as_expired(client, monkeypatch):
+    # YouTube answers an expired session with an empty library and a 200, so
+    # without a probe the app tells the user they have no playlists.
+    monkeypatch.setattr(proxy, "get_client", lambda: DeadSessionYT("top secret cookie"))
+    response = client.get("/playlists")
+    assert response.status_code == 401
+    assert "expired" in response.json()["detail"]
+    assert "top secret cookie" not in response.text
+
+
+def test_an_empty_library_on_a_live_session_is_still_just_empty(client, monkeypatch):
+    fake = FakeYT(playlists=[], playlist={"id": "LM", "tracks": []})
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.get("/playlists")
+    assert response.status_code == 200
+    assert response.json() == {"playlists": []}
+
+
+def test_an_expired_session_drops_the_cached_client(client, monkeypatch):
+    # Set the cache directly, so this proves the route clears proxy._client.
+    # Without it, fresh credentials copied into place are never read.
+    monkeypatch.setattr(proxy, "_client", DeadSessionYT())
+    client.get("/playlists")
+    assert proxy._client is None
+
+
+@pytest.mark.parametrize("path", ["/playlists", "/playlists/PL1"])
+def test_a_failing_route_drops_the_cached_client(client, monkeypatch, path):
+    monkeypatch.setattr(proxy, "_client", RaisingYT())
+    assert client.get(path).status_code == 502
+    assert proxy._client is None

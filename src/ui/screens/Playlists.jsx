@@ -151,7 +151,9 @@ export function PlaylistsScreen({ app, auth }) {
       </div>
 
       <div className="board-scroll" role="table" aria-label="Your playlists">
-        {shown.length === 0 && !busy ? (
+        {/* Not on an error: "returned no playlists" would then be a claim about
+            the account that the failed read never established. */}
+        {shown.length === 0 && !busy && !error ? (
           <BoardEmpty title={playlists.length ? 'Nothing matches' : 'No playlists yet'}>
             {playlists.length
               ? 'No playlist on the board has that in its name.'
