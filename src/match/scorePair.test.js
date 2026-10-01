@@ -8,6 +8,7 @@ import {
   SPELLING_DRIFT_MS,
   STRONG_DRIFT_MS,
   VARIANT_TAIL,
+  VIDEO_MAX_DRIFT_MS,
   scorePair,
 } from './scorePair.js'
 
@@ -17,8 +18,14 @@ const track = (over = {}) => ({
   primaryArtist: { id: 'a1', name: 'Karan Aujla' },
   durationMs: 188000,
   videoType: null,
+  // An album, as any catalogue track has. An untyped YouTube row WITHOUT one
+  // is read as a video, so this keeps the default on album-audio timing.
+  album: { id: 'al1', name: 'Making Memories' },
   ...over,
 })
+
+/** A YouTube official music video, which carries no album. */
+const video = (over = {}) => track({ videoType: 'MUSIC_VIDEO_TYPE_OMV', album: { id: null, name: '' }, ...over })
 
 /**
  * Split `\b(a|b|c)\b` into its top-level alternatives.
@@ -389,6 +396,46 @@ describe('scorePair', () => {
     ["Don't Look", "Don't Look 2"],
   ])('titles that differ by a number are not spelling variants, even at the same length: %s / %s', (spotifyName, youtubeName) => {
     expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))).toBeNull()
+  })
+
+  // A music video carries an intro, pauses and end credits the album audio
+  // does not, so its length is weaker evidence. Each pair is verbatim from
+  // the live libraries, and every one went unmatched under the 5s limit.
+  test.each([
+    ['Saade Pind', ['Khan Bhaini'], 276882, ['Khan Bhaini'], 284000],
+    ['Mithi Mithi', ['Amrit Maan', 'Jasmine Sandlas'], 221040, ['Amrit Maan', 'Jasmine Sandlas'], 238000],
+    ['Vibe', ['Diljit Dosanjh'], 155250, ['Diljit Dosanjh'], 185000],
+    ['Patola', ['Raf Saperra', 'DJ Jesta'], 240066, ['Raf-Saperra', 'DJ Jesta'], 217000],
+  ])('an official music video further from the audio length is likely: %s', (name, spotifyArtists, spotifyMs, youtubeArtists, youtubeMs) => {
+    const spotify = track({ name, ...credits(...spotifyArtists), durationMs: spotifyMs })
+    const youtube = video({ name, ...credits(...youtubeArtists), durationMs: youtubeMs })
+    expect(scorePair(spotify, youtube)?.tier).toBe('likely')
+  })
+
+  test('a music video is accepted up to the video window either way, and no further', () => {
+    expect(scorePair(track(), video({ durationMs: 188000 + VIDEO_MAX_DRIFT_MS }))?.tier).toBe('likely')
+    expect(scorePair(track(), video({ durationMs: 188000 - VIDEO_MAX_DRIFT_MS - 1 }))).toBeNull()
+  })
+
+  test('an untyped YouTube upload with no album is read as a video', () => {
+    // Verbatim from the live libraries.
+    const spotify = track({ name: 'Millionaire', ...credits('Yo Yo Honey Singh'), durationMs: 199114 })
+    const youtube = track({ name: 'Millionaire', ...credits('Honey Singh'), durationMs: 210000, album: { id: null, name: '' } })
+    expect(scorePair(spotify, youtube)?.tier).toBe('likely')
+  })
+
+  test.each([
+    ['album audio', { videoType: 'MUSIC_VIDEO_TYPE_ATV' }],
+    ['an untyped track with an album', { videoType: null }],
+  ])('%s keeps the catalogue length limit', (_, kind) => {
+    expect(scorePair(track(), track({ ...kind, durationMs: 188000 + MAX_DRIFT_MS + 1 }))).toBeNull()
+  })
+
+  test('a spelling variant on a music video still needs the lengths to agree', () => {
+    // The video window widens what length tolerates, not what a misspelt
+    // title needs: a title and a length that are both loose are no evidence.
+    const spotify = track({ name: 'Maar Sutya', durationMs: 239000 })
+    expect(scorePair(spotify, video({ name: 'Maar Sutiya', durationMs: 239000 + SPELLING_DRIFT_MS + 1 }))).toBeNull()
   })
 
   // A Spotify LOCAL file is the user's own audio, tagged by hand. Its artist

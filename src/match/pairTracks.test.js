@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import { pairTracks } from './pairTracks.js'
 
+// Every track carries an album, as catalogue audio does: scorePair reads an
+// untyped YouTube row WITHOUT one as a video, which has a wider length window.
 const sp = (id, name, artist, durationMs) => ({
   id, name, durationMs, videoType: null,
+  album: { id: null, name: 'Making Memories' },
   artists: [{ id: artist, name: artist }],
   primaryArtist: { id: artist, name: artist },
 })

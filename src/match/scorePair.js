@@ -31,6 +31,30 @@ export const MAX_DRIFT_MS = 5000
  */
 export const LOCAL_MAX_DRIFT_MS = 10_000
 
+/**
+ * The same limit for a YouTube VIDEO. A music video carries an intro, pauses
+ * and end credits the album audio does not, so its length is weaker
+ * evidence; across the live libraries, 37 same-song pairs sat between 5s and
+ * 30s apart, 33 of them official music videos. Either direction: a video edit
+ * can run short too ("Patola", 23s). A misspelt title still needs
+ * SPELLING_DRIFT_MS: this widens what length tolerates, not what a title
+ * needs. Likely, never strong, beyond STRONG_DRIFT_MS.
+ */
+export const VIDEO_MAX_DRIFT_MS = 30_000
+
+/**
+ * Whether a YouTube track is a video rather than album audio. ATV is album
+ * audio; OMV and UGC are videos. An untyped row is audio when it carries an
+ * album and a video when it does not — measured on the live library, the
+ * untyped rows with no album are all video uploads ("Payal", "Millionaire").
+ */
+function isVideo(track) {
+  const type = track?.videoType
+  if (type === 'MUSIC_VIDEO_TYPE_ATV') return false
+  if (type == null) return !track?.album?.name
+  return true
+}
+
 /** Dice coefficient on character bigrams, as the CSV matcher uses. */
 export const FUZZY_FLOOR = 0.9
 
@@ -489,7 +513,12 @@ export function scorePair(spotify, youtube) {
   const durationDeltaMs = youtubeMs - spotifyMs
   const drift = Math.abs(durationDeltaMs)
   const isLocal = spotify?.isLocal === true
-  if (drift > (isLocal ? LOCAL_MAX_DRIFT_MS : MAX_DRIFT_MS)) return null
+  const maxDrift = Math.max(
+    MAX_DRIFT_MS,
+    isLocal ? LOCAL_MAX_DRIFT_MS : 0,
+    isVideo(youtube) ? VIDEO_MAX_DRIFT_MS : 0,
+  )
+  if (drift > maxDrift) return null
 
   const spotifyTitle = foldTitle(spotify?.name)
   const youtubeTitle = foldTitle(youtube?.name)
