@@ -151,9 +151,12 @@ function tailNamesVariant(title) {
   const cut = text.search(TAIL_START)
   if (cut === -1) return false
 
-  return tailSegments(text.slice(cut)).some(
-    ({ separator, text: segment }) => SEQUEL_SEGMENT.test(segment) || vetoListFor(separator).test(segment),
-  )
+  return tailSegments(text.slice(cut)).some(segmentNamesVariant)
+}
+
+/** Whether one tail segment names a different recording, by the rules above. */
+function segmentNamesVariant({ separator, text }) {
+  return SEQUEL_SEGMENT.test(text) || vetoListFor(separator).test(text)
 }
 
 /** The list a tail segment is read against, by the separator that opened it. */
@@ -222,14 +225,23 @@ function foldArtist(name) {
 }
 
 /**
- * The part of a YouTube title before its trailing credits, or null when there
- * is no tail or any segment of the tail names a variant.
+ * A title reduced to what identifies the RECORDING, folded: its lead plus
+ * every tail segment that names a variant, with every other segment —
+ * credits, film tags, "(Official Video)" — dropped. '' when the title has no
+ * lead that could be a song title.
  *
- * Measured against the live library: 72 of 384 titles carry such a tail, and
- * the folded full title scores as low as 0.48 against the clean Spotify one —
- * so without this, a fifth of the playlist reports as unmatched, and in 2c
- * every one of those would be "filled" as a duplicate of a track already
- * present.
+ * M5: measured against the live library, 72 of 384 YouTube titles carry a
+ * tail, and the folded full title scores as low as 0.48 against the clean
+ * Spotify one — so without this, a fifth of the playlist reports as
+ * unmatched, and in 2c every one of those would be "filled" as a duplicate of
+ * a track already present.
+ *
+ * Audit root cause 7: both titles are reduced, by the same rule. Cutting only
+ * YouTube's lost a Spotify subtitle or film tag ('P.O.V (Point of View)',
+ * 'Kesariya (From "Brahmastra")'). And a variant segment is KEPT rather than
+ * vetoing the cut, so the same variant on both sides still meets: 'Yadan
+ * Vichre Sajan Dian (Remix)' against '... (Remix) (Official Video)'. A variant
+ * on one side only leaves the two reductions unequal, which is the veto.
  *
  * I-1: "Karan Aujla - Antidote (Official Video)" cuts to the ARTIST, not to a
  * title, and self-titled tracks and intros are common enough that the
@@ -245,21 +257,29 @@ function foldArtist(name) {
  * follows instead, and refused only if that is an artist too.
  *
  * @param {string} title
- * @param {Set<string>} credited the YouTube side's artist names, folded
+ * @param {Set<string>} credited that side's artist names, folded
  */
-export function leadingSegment(title, credited) {
-  const text = String(title ?? '')
+function essentialTitle(title, credited) {
+  const split = splitTitle(String(title ?? ''), credited)
+  if (!split) return ''
+  return matchText([split.lead, ...split.segments.filter(segmentNamesVariant).map(({ text }) => text)].join(' '))
+}
 
+/**
+ * A title's lead and tail segments, read past a leading artist credit; null
+ * when there is no lead that could be a title.
+ */
+function splitTitle(text, credited) {
   const colon = ARTIST_COLON.exec(text)
-  if (colon && credited.has(foldArtist(colon[1]))) return titleAfterArtist(text.slice(colon[0].length), credited)
+  if (colon && credited.has(foldArtist(colon[1]))) return splitAfterArtist(text.slice(colon[0].length), credited)
 
   const tail = TAIL_START.exec(text)
-  if (!tail) return null
+  if (!tail) return { lead: text, segments: [] }
   const lead = text.slice(0, tail.index).trim()
   if (!lead) return null
 
-  if (credited.has(foldArtist(lead))) return titleAfterArtist(text.slice(tail.index + tail[0].length), credited)
-  return tailNamesVariant(text) ? null : lead
+  if (credited.has(foldArtist(lead))) return splitAfterArtist(text.slice(tail.index + tail[0].length), credited)
+  return { lead, segments: tailSegments(text.slice(tail.index)) }
 }
 
 /**
@@ -271,16 +291,16 @@ export function leadingSegment(title, credited) {
 const ARTIST_COLON = /^([^:]+):\s/
 
 /**
- * The title in what follows an artist credit, or null when there is none.
- * Only this part's own tail is checked for a variant: the song title itself
- * now sits in the WHOLE title's tail, and a title word like "Live" in "Live
- * Forever" must not veto it.
+ * The lead and segments of what follows an artist credit, or null when that
+ * is an artist too. Its segments are this part's own tail only: the song
+ * title now sits in the WHOLE title's tail, and a title word like "Live" in
+ * "Live Forever" must not count as a variant segment.
  */
-function titleAfterArtist(rest, credited) {
-  if (tailNamesVariant(rest)) return null
+function splitAfterArtist(rest, credited) {
   const cut = rest.search(TAIL_START)
   const lead = (cut === -1 ? rest : rest.slice(0, cut)).trim()
-  return lead && !credited.has(foldArtist(lead)) ? lead : null
+  if (!lead || credited.has(foldArtist(lead))) return null
+  return { lead, segments: cut === -1 ? [] : tailSegments(rest.slice(cut)) }
 }
 
 /** Album audio beats a music video beats a user upload, on a tie only (M3). */
@@ -371,9 +391,12 @@ export function scorePair(spotify, youtube) {
   if (!spotifyTitle || !youtubeTitle) return null
 
   const titleExact = spotifyTitle === youtubeTitle
-  // M5: the same title wearing YouTube's credits is still the same title.
-  const leadFolded = matchText(leadingSegment(youtube?.name, new Set(youtubeNames(youtube))))
-  const titleViaLead = !titleExact && leadFolded !== '' && spotifyTitle === leadFolded
+  // M5: the same title wearing different decoration is still the same title.
+  const youtubeEssential = essentialTitle(youtube?.name, new Set(youtubeNames(youtube)))
+  const titleViaLead =
+    !titleExact &&
+    youtubeEssential !== '' &&
+    youtubeEssential === essentialTitle(spotify?.name, new Set(spotifyNames(spotify)))
   // M6 applies to the dice path too (I-3): bigram Dice is length-forgiving,
   // so a long enough title still clears the floor with a variant tag still
   // attached. The only exception is a genuine exact-fold match (titleExact),
@@ -405,7 +428,7 @@ export function scorePair(spotify, youtube) {
       durationDeltaMs,
       reason: titleExact
         ? 'Title and artist match exactly'
-        : 'Title and artist match once YouTube’s credits are set aside',
+        : 'Title and artist match once credits and tags are set aside',
     }
   }
 

@@ -430,6 +430,34 @@ describe('scorePair', () => {
     expect(scorePair(track({ name: 'Mission' }), track({ name: 'Mission: Impossible' }))).toBeNull()
   })
 
+  // Audit root cause 7: decoration was cut from the YouTube title alone, and
+  // only when nothing in its tail named a variant. Both titles are now
+  // reduced the same way: the lead, plus every segment that names a variant.
+  test.each([
+    // A Spotify subtitle against YouTube's credits. The title is a real
+    // live-library one; the piped credits are the library's usual shape.
+    ['P.O.V (Point of View)', 'P.O.V (Point of View) | Karan Aujla | Yeah Proof'],
+    // Decoration on the Spotify side only.
+    ['Antidote (From "Making Memories")', 'Antidote'],
+    // The same variant on both sides, with credits on YouTube's. The first
+    // title is a real live-library one, wearing a typical video tag.
+    ['Yadan Vichre Sajan Dian (Remix)', 'Yadan Vichre Sajan Dian (Remix) (Official Video)'],
+    ['Antidote - Trap Mix', 'Antidote - Trap Mix (Official Visualizer)'],
+    ['Antidote (Part 2)', 'Antidote (Part 2) (Official Video)'],
+  ])('both titles shed their decoration and keep their variants: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))?.tier).toBe('strong')
+  })
+
+  test.each([
+    // The variant on one side only.
+    ['Antidote', 'Antidote (Remix) (Official Video)'],
+    ['Antidote (Remix)', 'Antidote (Official Video)'],
+    // A different variant on each side.
+    ['Antidote (Remix)', 'Antidote (Live) (Official Video)'],
+  ])('titles whose variants differ are still not proposed: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))).toBeNull()
+  })
+
   test('an artist-first title whose next part is another artist is still refused', () => {
     // 'Ikky - Karan Aujla' is two credits, not a song called 'Karan Aujla'.
     const spotify = track({ name: 'Karan Aujla', ...credits('Karan Aujla') })
