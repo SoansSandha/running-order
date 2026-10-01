@@ -152,9 +152,48 @@ function tailNamesVariant(title) {
   if (cut === -1) return false
 
   return tailSegments(text.slice(cut)).some(
-    ({ separator, text: segment }) =>
-      SEQUEL_SEGMENT.test(segment) || (separator === '|' ? PIPE_VARIANT_TAIL : VARIANT_TAIL).test(segment),
+    ({ separator, text: segment }) => SEQUEL_SEGMENT.test(segment) || vetoListFor(separator).test(segment),
   )
+}
+
+/** The list a tail segment is read against, by the separator that opened it. */
+function vetoListFor(separator) {
+  return separator === '|' ? PIPE_VARIANT_TAIL : VARIANT_TAIL
+}
+
+/**
+ * Every variant a WHOLE title names — its base as well as its tail — folded so
+ * that "Lo-Fi", "Lo Fi" and "Lofi" agree.
+ *
+ * The base is read against the full list, which is how a bare suffix with no
+ * separator at all ("Kihnu Yaad Kar Kar Hasdi Live") is seen. Tail segments
+ * are read by the same per-separator rule as tailNamesVariant, so a pipe
+ * credit like "| Mix Singh" names nothing here either.
+ */
+function namedVariants(title) {
+  const text = String(title ?? '')
+  const cut = text.search(TAIL_START)
+  const parts =
+    cut === -1
+      ? [{ separator: '', text }]
+      : [{ separator: '', text: text.slice(0, cut) }, ...tailSegments(text.slice(cut))]
+
+  const names = new Set()
+  for (const { separator, text: part } of parts) {
+    for (const word of part.match(new RegExp(vetoListFor(separator).source, 'gi')) ?? []) {
+      names.add(word.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    }
+    // The base never opens with a separator, so only a tail segment can match.
+    if (SEQUEL_SEGMENT.test(part)) names.add('sequel')
+  }
+  return names
+}
+
+/** Whether two titles name exactly the same variants (audit root cause 4). */
+function sameVariants(a, b) {
+  const left = namedVariants(a)
+  const right = namedVariants(b)
+  return left.size === right.size && [...left].every((name) => right.has(name))
 }
 
 /**
@@ -274,10 +313,16 @@ export function scorePair(spotify, youtube) {
   // so a long enough title still clears the floor with a variant tag still
   // attached. The only exception is a genuine exact-fold match (titleExact),
   // which already short-circuits above and never reaches this branch.
+  //
+  // The tail check alone reads only YouTube's tail, so both titles must also
+  // name the SAME variants: a bare "Live" with no separator, or a "(Lofi)" on
+  // the Spotify side, otherwise clears the floor unchecked (audit root cause 4).
   const titleClose =
     titleExact ||
     titleViaLead ||
-    (diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR && !tailNamesVariant(youtube?.name))
+    (diceCoefficient(spotifyTitle, youtubeTitle) >= FUZZY_FLOOR &&
+      !tailNamesVariant(youtube?.name) &&
+      sameVariants(spotify?.name, youtube?.name))
   if (!titleClose) return null
 
   const spotifyPrimary = foldArtist(spotify?.primaryArtist?.name)

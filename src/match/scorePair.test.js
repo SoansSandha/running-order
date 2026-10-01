@@ -302,6 +302,34 @@ describe('scorePair', () => {
     expect(scorePair(spotify, youtube)).toBeNull()
   })
 
+  // Audit root cause 4: the dice veto above read only the YouTube title's
+  // tail. A variant named in the base of the title (no separator at all), or
+  // on the Spotify side, cleared the floor with nothing checking it. The
+  // asserted dice score is what proves each pair reaches the dice path.
+  test.each([
+    ['Kihnu Yaad Kar Kar Hasdi', 'Kihnu Yaad Kar Kar Hasdi Live'],
+    ['Tumse Milke Dilka Jo Haal (Lofi)', 'Tumse Milke Dilka Jo Haal'],
+    ['Jaan Se Guzarte Hain Dil Pe Zakham Khate Hain Live', 'Jaan Se Guzarte Hain Dil Pe Zakham Khate Hain Lofi'],
+    ['Jaan Se Guzarte Hain Dil Pe Zakham Khate Hain (Part 2)', 'Jaan Se Guzarte Hain Dil Pe Zakham Khate Hain'],
+  ])('titles that name different variants are not proposed on the dice path: %s / %s', (spotifyName, youtubeName) => {
+    expect(diceCoefficient(matchText(spotifyName), matchText(youtubeName))).toBeGreaterThanOrEqual(FUZZY_FLOOR)
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName }))).toBeNull()
+  })
+
+  test.each([
+    // The same variant on both sides is the same recording.
+    ['Kihnu Yaad Kar Kar Hasdi Live', 'Kihnu Yaad Kar Kar Hasdii Live'],
+    // Spelt differently, still the same variant.
+    ['Tumse Milke Dilka Jo Haal (Lo-Fi)', 'Tumse Milke Dilka Jo Haal Lofi'],
+    // A pipe credit names no variant here either, exactly as on the lead path.
+    [
+      'Tujhe Dekha To Yeh Jaana Sanam Pyaar Hota Hai Deewana Sanam',
+      'Tujhe Dekha To Yeh Jaana Sanam Pyaar Hota Hai Deewana Sanamm | Mix Singh',
+    ],
+  ])('titles that name the same variants are still likely on the dice path: %s / %s', (spotifyName, youtubeName) => {
+    expect(scorePair(track({ name: spotifyName }), track({ name: youtubeName })).tier).toBe('likely')
+  })
+
   test('an exact live-to-live match still reaches strong (the dice-veto exception)', () => {
     const result = scorePair(track({ name: 'Antidote (Live)' }), track({ name: 'Antidote (Live)' }))
     expect(result.tier).toBe('strong')
