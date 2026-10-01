@@ -571,6 +571,31 @@ describe('scorePair', () => {
     // the pair to likely.
     expect(scorePair(track(credits('Vishal-Shekhar')), track(credits('Vishal & Shekhar')))?.tier).toBe('strong')
   })
+
+  // Audit root cause 9: the artist fold was literal about spacing and about a
+  // leading honorific. YouTube credits 'KS Makhan' and both 'Ustad Nusrat
+  // Fateh Ali Khan' and 'Nusrat Fateh Ali Khan' in the live library.
+  test.each([
+    ['K.S. Makhan', 'KS Makhan'],
+    ['A.R. Rahman', 'AR Rahman'],
+    ['Sidhu Moose Wala', 'Sidhu Moosewala'],
+    ['Nusrat Fateh Ali Khan', 'Ustad Nusrat Fateh Ali Khan'],
+    ['Ustad Nusrat Fateh Ali Khan', 'Nusrat Fateh Ali Khan'],
+    ['Pt. Jasraj', 'Pandit Jasraj'],
+  ])('the same artist spelt %s and %s still matches strong', (spotifyName, youtubeName) => {
+    expect(scorePair(track(credits(spotifyName)), track(credits(youtubeName)))?.tier).toBe('strong')
+  })
+
+  test.each([
+    // 'Dr' is part of a stage name, not an honorific: the live library
+    // credits 'Dr. Zeus'.
+    ['Dr. Zeus', 'Zeus'],
+    // Different artists who share a surname. All three are in the library.
+    ['Shinda Kahlon', 'Kahlon'],
+    ['Savi Kahlon', 'Shinda Kahlon'],
+  ])('different artists %s and %s are still not proposed', (spotifyName, youtubeName) => {
+    expect(scorePair(track(credits(spotifyName)), track(credits(youtubeName)))).toBeNull()
+  })
 })
 
 /** Artists in credit order, as both services' tracks carry them. */

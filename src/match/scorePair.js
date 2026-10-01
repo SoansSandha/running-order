@@ -223,10 +223,26 @@ function sameVariants(a, b) {
  * Do NOT "simplify" this to either helper on its own — each single folder
  * silently drops one of those two columns, and a dropped artist agreement is
  * not a demotion here, it is the pair vanishing entirely.
+ *
+ * Audit root cause 9: on top of that, spacing is ignored and a leading
+ * musical honorific is dropped. Dotted initials fold to single letters
+ * ("K.S. Makhan" is "k s makhan" against "KS Makhan"), compound names split
+ * differently between services ("Sidhu Moose Wala" / "Sidhu Moosewala"), and
+ * the live library credits both "Ustad Nusrat Fateh Ali Khan" and "Nusrat
+ * Fateh Ali Khan". Two different artists whose names differ only in spacing
+ * would also have to share a title and a length to be proposed.
+ *
+ * Only ustad, pandit and pt. count as honorifics. "Dr" is part of stage
+ * names ("Dr. Zeus" is in the library); bhai, sant and baba are carried the
+ * same way by both services in kirtan credits, and "Baba Sehgal" is a stage
+ * name too. A shorter name inside a longer one is NOT folded together
+ * either: "Kahlon", "Savi Kahlon" and "Shinda Kahlon" are three artists.
  */
 function foldArtist(name) {
-  return sortKey(matchText(name))
+  return sortKey(matchText(name)).replace(HONORIFIC, '').replace(/ /g, '')
 }
+
+const HONORIFIC = /^(?:ustad|pandit|pt) (?=\S)/
 
 /**
  * A title reduced to what identifies the RECORDING, folded: its lead plus
