@@ -80,6 +80,17 @@ export const VARIANT_TAIL =
 export const PIPE_VARIANT_TAIL =
   /\b(karaoke|instrumental|bass[\s-]?boost(?:ed)?|8[\s-]?d|16[\s-]?d|\d{1,2}[\s-]?d[\s-]?audio|nightcore|slowed|reverb(?:ed)?|sped[\s-]?up|lo[\s-]?fi|unplugged|a[\s-]?cappella|acapella|acoustic|extended|mashup|medley)\b/i
 
+/**
+ * A tail segment that OPENS with a sequel marker — "(Part 2)", " - Pt. 2",
+ * " | Part II" — names a different song, under any separator.
+ *
+ * Anchored to the start of the segment, and kept out of VARIANT_TAIL, because
+ * film sequels are named the same way: `(From "Carry On Jatta Part 2")` carries
+ * the words and is the original song credited to its film. As a free word in
+ * the list it would veto every song from a sequel film.
+ */
+const SEQUEL_SEGMENT = /^\s*[|([–—:-]\s*(?:part|pt\.?)\s*(?:\d+|[ivx]+)\b/i
+
 /** Where YouTube starts appending credits, tags and release years. */
 // `[` needs no escape inside a character class, and oxlint flags one.
 const TAIL_START = /\s[|([]|\s[-–—:]\s/
@@ -132,14 +143,17 @@ function tailSegments(tail) {
  *   narrower PIPE_VARIANT_TAIL, which holds only words that cannot be part of
  *   someone's name. That is what keeps "Antidote | Mix Singh" matching while
  *   "Antidote | Karaoke" is vetoed.
+ * - Under either separator, a segment that opens with a sequel marker is a
+ *   different song (SEQUEL_SEGMENT).
  */
 function tailNamesVariant(title) {
   const text = String(title ?? '')
   const cut = text.search(TAIL_START)
   if (cut === -1) return false
 
-  return tailSegments(text.slice(cut)).some(({ separator, text: segment }) =>
-    (separator === '|' ? PIPE_VARIANT_TAIL : VARIANT_TAIL).test(segment),
+  return tailSegments(text.slice(cut)).some(
+    ({ separator, text: segment }) =>
+      SEQUEL_SEGMENT.test(segment) || (separator === '|' ? PIPE_VARIANT_TAIL : VARIANT_TAIL).test(segment),
   )
 }
 

@@ -216,6 +216,26 @@ describe('scorePair', () => {
     expect(scorePair(track(), track({ name }))).toBeNull()
   })
 
+  // Audit root cause 3: a sequel is a different song. A Part 2 only reaches
+  // strong when it runs within 2s of the original, but when it does, nothing
+  // else in the title says so.
+  test.each([
+    'Antidote (Part 2)',
+    'Antidote (Pt. 2)',
+    'Antidote (Part II)',
+    'Antidote - Part 2',
+    'Antidote | Part 2',
+  ])('a sequel marker is a different song, not decoration: %s', (name) => {
+    expect(scorePair(track(), track({ name }))).toBeNull()
+  })
+
+  test('a film name that carries a part number is still decoration', () => {
+    // Why the sequel marker must OPEN its segment rather than appear anywhere
+    // in it: film sequels are named this way, and this is the original song
+    // credited to its film.
+    expect(scorePair(track(), track({ name: 'Antidote (From "Carry On Jatta Part 2")' })).tier).toBe('strong')
+  })
+
   test.each([
     'Antidote (2D Animated Video)',
     'Antidote (3D Video)',
