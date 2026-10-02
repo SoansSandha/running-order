@@ -88,7 +88,7 @@ Continuing the numbering in the original design doc.
 | D19 | **Adding missing tracks to YouTube is in scope**, one direction only | Reorder-only, as D3 confined the CSV | "Sync" means little if the two playlists never converge in *contents*. D3 refused membership changes because adding needs a search layer and a disambiguation UI — both of which 2b builds anyway. It stays one-directional because writing to Spotify from a guess would compromise the canonical list (D10) |
 | D20 | **YouTube sorts standalone, with a per-source capability registry** | Dropping the mode; or offering all nine and letting three fail | Five strategies work on YouTube's metadata and a sixth degrades honestly. Dropping them would remove working functionality; offering all nine would put controls on screen that quietly do nothing, which Product Principle 4 forbids. So each source declares what it supports and the UI disables the rest with the reason visible |
 | D21 | **No YouTube Data API** | Adding it back to recover date-added | Date-added is wanted on Spotify, where it already works. It is not wanted on YouTube, so the one field the Data API would recover has no user behind it. Declined on need, not on cost |
-| D22 | **Browser credentials, not OAuth**, for YouTube | ytmusicapi's OAuth flow | Google expires refresh tokens after 7 days for any External app in Testing status, and `youtube` is not an exempt scope. Publishing to Production requires a home page, privacy policy and verifiable authorised domain — a local single-user tool has none. Browser credentials need no Google Cloud project and last ~2 years. See §5 |
+| D22 | **Browser credentials, not OAuth**, for YouTube | ytmusicapi's OAuth flow | Google expires refresh tokens after 7 days for any External app in Testing status, and `youtube` is not an exempt scope. Publishing to Production requires a home page, privacy policy and verifiable authorised domain — a local single-user tool has none. Browser credentials need no Google Cloud project, and are claimed to last ~2 years — measured far shorter when copied from a browser still in use. See §5 |
 
 ---
 
@@ -237,13 +237,21 @@ only fix is publishing to Production — which requires a home page, a privacy
 policy URL, and a verifiable authorised domain. A local single-user tool has
 none of those, so OAuth means re-authorising weekly, forever.
 
-Browser credentials last roughly two years while the session stays valid, and
-need no Google Cloud project at all.
+Browser credentials need no Google Cloud project at all. ytmusicapi says they
+last "about 2 years unless you log out" — **measured, they did not**: two
+captures taken from the user's everyday browser died within about 6 days and
+within about 1 day (2026-09-24 and 2026-09-30). That fits what yt-dlp
+documents: "YouTube rotates account cookies frequently on open YouTube browser
+tabs", so a copy taken from a session that stays in use goes stale. Its
+remedy, adopted here, is to capture from a **private window** and close it so
+the session is never opened again (proxy/README.md). Whether that copy then
+lasts is not yet measured. If it also dies within days, browser auth is no
+longer-lived than OAuth's 7 days and D22 must be revisited.
 
 | | OAuth | Browser auth |
 |---|---|---|
 | Google Cloud project | Required | None |
-| Lifetime | 7 days unless published | ~2 years |
+| Lifetime | 7 days unless published | Claimed ~2 years; measured ≤6 days from an in-use browser |
 | Publishing prerequisites | Domain + privacy policy | — |
 | Playlist editing | Yes | Yes |
 
@@ -381,10 +389,40 @@ audio track wins. It is a tie-breaker only — never a reason to promote or
 reject a candidate on its own, because a legitimate match is sometimes only
 available as a video.
 
-Title folding reuses `csv/match.js`'s `matchText` unchanged: `(feat. X)` and
+Title folding starts from `csv/match.js`'s `matchText`: `(feat. X)` and
 remaster tags dropped, `(Live)` and `(Remix)` kept. Cross-service matching is
-a harder instance of the same problem, so this extends that module rather
-than forking it.
+a harder instance of the same problem, so `src/match/scorePair.js` builds on
+that module rather than forking it. What it adds, after an adversarial audit
+(2026-09-30) found 34 defects across 11 root causes:
+
+- **Both titles are reduced the same way** before comparing: the lead, read
+  past a leading artist credit, plus every tail segment that names a
+  variant. Credits, film tags and `(Official Video)` drop out on either side;
+  a variant on one side only leaves the two unequal, which is the veto.
+- **Every tail segment is checked**, not just the first, against a variant
+  list. A pipe segment is checked against the same list less `female` and
+  `male`, which pipes use to credit singers. **Spotify is the source of
+  truth** (owner decision): a variant named after a pipe vetoes unless
+  Spotify's own title names it too. The accepted cost is that a spaced credit
+  such as `| Mix Singh` vetoes as well; one-word `MixSingh` does not.
+- **A sequel marker** opening a segment (`(Part 2)`, ` - Pt. 2`) is a
+  different song.
+- **The fuzzy path requires both titles to name the same variants**.
+- **A joined YouTube byline** (`AP Dhillon & Amari`) also counts as each
+  artist in it. Artist names ignore spacing, a leading ustad, pandit or pt.,
+  and one seeded stage-name alias.
+- **Titles and artists in any script** fold keeping their own letters and
+  marks; `matchText` alone erased them.
+- **An artist named only in the title is not artist evidence** (owner
+  decision): label-channel uploads stay unproposed.
+- **Length windows depend on what each side is.** Catalogue audio must agree
+  within 5s. A YouTube music video (OMV, UGC, or an untyped row with no
+  album) may sit 30s out, for its intro, pauses and end credits. A Spotify
+  local file may sit 10s out, its length being the user's own copy. Beyond
+  2s it is only ever likely.
+- **A spelling variant is accepted when the lengths agree** within 3s
+  (`Maar Sutya` / `Maar Sutiya`), and a fuzzy title must carry the same
+  numbers (`… 2.0` is a different song).
 
 **Nothing below Certain is ever applied without confirmation** (D15).
 
@@ -701,3 +739,37 @@ the user's Spotify account. Both fixed. These four were deferred deliberately:
 - **`csv/detectColumns.js` and `csv/match.js` still hardcode Spotify URI
   patterns** (§4 named this). The mirror path does not need them, so it stays
   out of scope — but CSV-driven ordering of a YouTube playlist would.
+
+### Carried forward from the matcher branch (2026-09-30)
+
+An adversarial audit of `scorePair` (five attack lenses, every finding
+reproduced and judged independently) confirmed 34 defects with 11 root
+causes. All are fixed or decided, and so is the pipe carve-out the audit
+left parked. Still open:
+
+- **The audit was not exhausted.** It stopped at its three-round cap while
+  round three still confirmed new defects.
+- **The variant list now guards both sides.** Since both titles are reduced,
+  a missing word lets its tag through from Spotify's side as well as
+  YouTube's. Tribute, clean, censored, vocals only, jhankar beats and refix
+  remain deliberately absent.
+- **The alias map needs feeding.** It holds one pair, seeded from names the
+  live library credits both ways. A general rule cannot work: `Kahlon`, `Savi
+  Kahlon` and `Shinda Kahlon` are three artists.
+- **A transliterated title never meets its native-script form**
+  (`Tum Hi Ho` / `तुम ही हो`). Identical native-script titles now match.
+The tier histogram has run against both real libraries; its results are in
+STATUS. Two things it surfaced are now settled:
+
+- **Artist order and count do not matter** (owner decision). With the exact
+  title and the length within 2s, any artist in common is strong — YouTube
+  often credits three where Spotify credits one, or the same ones in another
+  order. The reason text still says which kind of agreement it was.
+- **An expired YouTube session is reported as one.** YouTube answers the
+  library read with `[]` and a 200, so the proxy checks an empty library
+  against the live probe and answers 401 when the session is dead; the app
+  says the session expired instead of claiming the account has no
+  playlists. Any failing route now drops the cached client, so fresh
+  credentials are read without a restart. A dead session on a *playlist*
+  read still surfaces as a 502: there the network itself could be down, so
+  a failed probe proves nothing.

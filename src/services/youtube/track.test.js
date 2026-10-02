@@ -88,4 +88,16 @@ describe('normalizeYouTubeTracks', () => {
     expect(tracks).toHaveLength(raw.length)
     expect(tracks.map((t) => t.itemId)).toEqual(raw.map((r) => r.setVideoId))
   })
+
+  test('carries videoType so the matcher can prefer an album track', () => {
+    const [album] = normalizeYouTubeTracks([ALBUM_TRACK])
+    const [video] = normalizeYouTubeTracks([MUSIC_VIDEO])
+    expect(album.videoType).toBe('MUSIC_VIDEO_TYPE_ATV')
+    expect(video.videoType).toBe('MUSIC_VIDEO_TYPE_OMV')
+  })
+
+  test('videoType is null when YouTube does not say', () => {
+    // Measured: 13 of 383 real rows carry no videoType.
+    expect(normalizeYouTubeTracks([UNTYPED])[0].videoType).toBeNull()
+  })
 })

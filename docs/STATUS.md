@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-24 · **HEAD:** `see git log`
+**Last updated:** 2026-09-30 · **HEAD:** `see git log`
 
 Design and decisions: [2026-09-09-design.md](2026-09-09-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -15,8 +15,8 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **323 JavaScript tests across
-21 files, all passing** (plus 12 Python tests for the proxy). Build clean,
+All logic layers and all five screens are built. **550 JavaScript tests across
+25 files, all passing** (plus 18 Python tests for the proxy). Build clean,
 design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
@@ -230,8 +230,14 @@ Three of these contradicted the documentation:
 OAuth dead-ends for a local single-user tool. Google expires refresh tokens
 after **7 days** for any External app in Testing status, and `youtube` is not
 an exempt scope; publishing to Production needs a home page, privacy policy
-and a verifiable authorised domain. Browser auth needs no Google Cloud project
-and lasts roughly two years. Recorded as D22 with the evidence.
+and a verifiable authorised domain. Browser auth needs no Google Cloud project.
+Recorded as D22 with the evidence.
+
+Its lifetime is **not** the "about 2 years" ytmusicapi claims. Two captures
+from the everyday browser died within ~6 days and ~1 day: YouTube rotates the
+cookies of a session left open in a tab, so the copy goes stale. Capture from
+a private window and close it (proxy/README.md). Whether that lasts is not yet
+measured — if it dies within days too, D22 needs revisiting.
 
 `ytmusicapi` labels browser auth deprecated, so it is **pinned to `==1.12.3`**.
 Checked rather than assumed: as of that version it is a soft deprecation —
@@ -254,6 +260,90 @@ password; it is not in the repository and must never be.
   this by calling `buildMoveOps`. Task 6's adapter also drops rows with a
   null `setVideoId` at the boundary, so the check is defence in depth rather
   than the only guard.
+
+---
+
+## YouTube Music: 2b matcher, audited
+
+Branch `youtube-matching-2b`. Plan:
+[cross-service matcher](superpowers/plans/2026-09-28-cross-service-matcher.md).
+`src/match/scorePair.js` judges one Spotify/YouTube pair; `pairTracks.js`
+claims pairs greedily across two playlists. No UI yet.
+
+An adversarial audit on 2026-09-30 attacked `scorePair` from five angles and
+had every finding reproduced and judged by two independent agents. It
+confirmed **34 defects with 11 root causes**, 8 of them strong matches that
+"Confirm all" would have applied unreviewed. Every one is now fixed or
+decided, one commit per root cause, each test written and seen failing first.
+
+| Root cause | Outcome |
+|---|---|
+| 1. Only the first bracket was checked for a variant | Fixed |
+| 2. Variant spellings missed (16D Audio, Bass Boost, Remixed…) | Fixed |
+| 3. Sequel markers treated as decoration | Fixed — owner: a sequel is a different song |
+| 4. Fuzzy path checked YouTube's tail only | Fixed |
+| 5. Joined YouTube bylines never split | Fixed |
+| 6. Artist-first titles refused instead of read past | Fixed |
+| 7. Decoration cut from YouTube's title only | Fixed |
+| 8. Artist named only in the title | **Declined** — owner: the artist tags must agree |
+| 9. Spacing and honorifics in artist names | Fixed — ustad, pandit, pt. only |
+| 10. Stage-name aliases | Fixed — a seeded alias map |
+| 11. Non-Latin titles folded to nothing | Fixed, plus a wrong strong it hid: mixed-script titles kept only their Latin words |
+
+Also added on the owner's say-so: bare `(Sad)`, `(Female)` and `(Male)` tags,
+and the end of the pipe carve-out. Spotify is the source of truth, so a
+variant after a pipe (`| Live`, `| Remix`, `| Trap Mix`) now vetoes unless
+Spotify's own title names it too. The accepted cost is that a spaced credit
+such as `| Mix Singh` vetoes as well; the live library holds none.
+
+**Measured on the real 385-track YouTube library:** 8 tracks that could never
+match now match strong (5 joined bylines, 3 artist-first titles), and none of
+the 147,840 ordered pairs of *different* tracks changes tier.
+
+### The tier gate, run against both real libraries (2026-09-30)
+
+The plan's own gate before any confirmation UI. Spotify "Punjabi Songs" (418
+tracks, exported through the app itself — Exportify crashes on a `null`
+saved album) against YouTube "punjabi songs" (385 readable of 389):
+
+| | Before the audit | After the audit | Now |
+|---|---|---|---|
+| Strong | 221 | 234 | **234** |
+| Likely | 33 | 34 | **73** |
+| Spotify unmatched | 164 | 150 | **111** |
+| YouTube unmatched | 131 | 117 | **78** |
+
+**No wrong pair was found.** Every likely pair, and every strong pair whose
+titles were not identical, was checked by hand; the rest are an identical
+title, the same primary artist and within 2s.
+
+The "after the audit" column showed what was left, and four rules came from
+it, on the owner's say-so:
+
+- **A music video gets a 30s length window**, either way, as likely only.
+  Intros, pauses and end credits had kept 40 of 132 official music videos
+  unmatched under 5s. 107 of 132 now pair.
+- **A spelling variant is accepted when the lengths agree** within 3s
+  (`Maar Sutya` / `Maar Sutiya`), as likely only.
+- **A fuzzy title must carry the same numbers**, so `Mai Tere Ishq Mein 2.0`,
+  `Akhiyan Udeekdian 2.0` and `Don't Look 2` never meet their originals.
+- **A Spotify local file is read as the user's own tags**: its artist field
+  is split like a byline (`Alfaaz; Yo Yo Honey Singh`) and its length may sit
+  10s out.
+
+What is left unmatched on the Spotify side is overwhelmingly absent from the
+YouTube playlist altogether — the fill half's job in 2c. Nine same-title
+pairs sit beyond 30s and stay unmatched as likely different edits
+(`Kinna Sohna` +206s).
+
+Two more came after it, also on the owner's say-so: **artist order and count
+do not matter** for strong — any artist in common, with the exact title and
+the length within 2s — which moved 10 pairs to strong (all correct), giving
+**244 strong, 63 likely**. And **an expired YouTube session is reported as
+one** instead of as an empty library; fresh credentials are picked up without
+a restart (see [proxy/README.md](../proxy/README.md)).
+
+The rest is in the design's §14.
 
 ---
 

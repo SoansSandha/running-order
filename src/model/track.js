@@ -80,6 +80,8 @@ export function normalizePlaylistItem(item, index) {
     // goes here. See docs/2026-09-18-youtube-mirror-design.md §6.
     source: 'spotify',
     itemId: null,
+    // Spotify has no equivalent. Present so the matcher never reads undefined.
+    videoType: null,
 
     isLocal: item?.is_local === true,
     isUnavailable,

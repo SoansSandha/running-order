@@ -20,6 +20,22 @@ export class ProxyUnavailableError extends Error {
   }
 }
 
+/**
+ * The proxy is running, but YouTube no longer accepts its stored session.
+ * The proxy reports this as a 401; it would otherwise reach the user as an
+ * empty library.
+ */
+export class YouTubeSessionExpiredError extends Error {
+  constructor() {
+    super(
+      'Your YouTube Music session has expired. Capture fresh credentials with ' +
+        '`ytmusicapi browser` (see proxy/README.md), copy browser.json into ' +
+        'proxy/, then reload.',
+    )
+    this.name = 'YouTubeSessionExpiredError'
+  }
+}
+
 export function createYouTubeClient({ baseUrl = DEFAULT_BASE_URL, fetch: fetchImpl = globalThis.fetch } = {}) {
   async function request(path) {
     let response
@@ -30,6 +46,7 @@ export function createYouTubeClient({ baseUrl = DEFAULT_BASE_URL, fetch: fetchIm
       // and the user can act on it, so it keeps its own type.
       throw new ProxyUnavailableError(cause)
     }
+    if (response.status === 401) throw new YouTubeSessionExpiredError()
     if (!response.ok) {
       throw new Error(`YouTube proxy returned ${response.status} for ${path}`)
     }

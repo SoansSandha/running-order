@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createYouTubeClient, ProxyUnavailableError } from './client.js'
+import { createYouTubeClient, ProxyUnavailableError, YouTubeSessionExpiredError } from './client.js'
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body })
 
@@ -52,5 +52,17 @@ describe('createYouTubeClient', () => {
     const failure = await client.listPlaylists().catch((error) => error)
     expect(failure).not.toBeInstanceOf(ProxyUnavailableError)
     expect(failure.message).toMatch(/500/)
+  })
+
+  test('reports an expired YouTube session as its own error, saying what to do', async () => {
+    // The proxy answers 401 when the library comes back empty and its live
+    // probe fails. Without this the screen says the account has no playlists.
+    const client = clientWith(vi.fn(async () => ({
+      ok: false, status: 401, json: async () => ({ detail: 'YouTube Music session expired.' }),
+    })))
+    const failure = await client.listPlaylists().catch((error) => error)
+    expect(failure).toBeInstanceOf(YouTubeSessionExpiredError)
+    expect(failure.message).toMatch(/expired/)
+    expect(failure.message).toMatch(/ytmusicapi browser/)
   })
 })

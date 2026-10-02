@@ -64,6 +64,20 @@ def auth_status() -> dict:
         return {"authenticated": False}
 
 
+def session_alive() -> bool:
+    """One authenticated call, to tell a live session from a dead one.
+
+    A failure drops the cached client, so credentials refreshed on disk are
+    read on the next call instead of the dead session being reused forever.
+    """
+    try:
+        get_client().get_playlist("LM", limit=1)
+        return True
+    except Exception:
+        reset_client()
+        return False
+
+
 @app.post("/auth/status")
 def auth_status_live() -> dict:
     """Whether the stored session still authenticates server-side (spec §5).
@@ -72,21 +86,27 @@ def auth_status_live() -> dict:
     call at construction, so a session YouTube killed loads exactly as well
     as a live one. This makes one authenticated call to find out.
     """
-    try:
-        get_client().get_playlist("LM", limit=1)
-        return {"authenticated": True}
-    except Exception:
-        reset_client()
-        return {"authenticated": False}
+    return {"authenticated": session_alive()}
 
 
 @app.get("/playlists")
 def list_playlists() -> dict:
-    """The user's library playlists, renamed to the app's field names."""
+    """The user's library playlists, renamed to the app's field names.
+
+    An EXPIRED session does not fail here: YouTube answers the library read
+    with an empty list and a 200, and the app would tell the user they have no
+    playlists. So an empty library is checked against the live probe, and
+    reported as 401 when the session is dead. The inference is sound because
+    YouTube just answered — the network is fine, so a failing authenticated
+    call is the session.
+    """
     try:
         raw = get_client().get_library_playlists(limit=None)
     except Exception:
+        reset_client()
         raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
+    if not raw and not session_alive():
+        raise HTTPException(status_code=401, detail="YouTube Music session expired.")
     return {
         "playlists": [
             {
@@ -115,6 +135,7 @@ def get_playlist(playlist_id: str) -> dict:
     try:
         raw = get_client().get_playlist(playlist_id, limit=None)
     except Exception:
+        reset_client()
         # Never interpolate the exception's own string: for a malformed
         # credentials file, a json.JSONDecodeError's `.doc` carries the whole
         # document, which is proxy/browser.json — session cookies.

@@ -69,6 +69,9 @@ export function normalizeYouTubeTracks(rawTracks) {
 
       source: 'youtube',
       itemId: raw.setVideoId,
+      // ATV is an album audio track, OMV an official music video, UGC a user
+      // upload. The matcher uses it only to break a tie (M3).
+      videoType: raw.videoType ?? null,
 
       isLocal: false,
       isUnavailable: raw.isAvailable === false,
