@@ -88,7 +88,7 @@ Continuing the numbering in the original design doc.
 | D19 | **Adding missing tracks to YouTube is in scope**, one direction only | Reorder-only, as D3 confined the CSV | "Sync" means little if the two playlists never converge in *contents*. D3 refused membership changes because adding needs a search layer and a disambiguation UI — both of which 2b builds anyway. It stays one-directional because writing to Spotify from a guess would compromise the canonical list (D10) |
 | D20 | **YouTube sorts standalone, with a per-source capability registry** | Dropping the mode; or offering all nine and letting three fail | Five strategies work on YouTube's metadata and a sixth degrades honestly. Dropping them would remove working functionality; offering all nine would put controls on screen that quietly do nothing, which Product Principle 4 forbids. So each source declares what it supports and the UI disables the rest with the reason visible |
 | D21 | **No YouTube Data API** | Adding it back to recover date-added | Date-added is wanted on Spotify, where it already works. It is not wanted on YouTube, so the one field the Data API would recover has no user behind it. Declined on need, not on cost |
-| D22 | **Browser credentials, not OAuth**, for YouTube | ytmusicapi's OAuth flow | Google expires refresh tokens after 7 days for any External app in Testing status, and `youtube` is not an exempt scope. Publishing to Production requires a home page, privacy policy and verifiable authorised domain — a local single-user tool has none. Browser credentials need no Google Cloud project and last ~2 years. See §5 |
+| D22 | **Browser credentials, not OAuth**, for YouTube | ytmusicapi's OAuth flow | Google expires refresh tokens after 7 days for any External app in Testing status, and `youtube` is not an exempt scope. Publishing to Production requires a home page, privacy policy and verifiable authorised domain — a local single-user tool has none. Browser credentials need no Google Cloud project, and are claimed to last ~2 years — measured far shorter when copied from a browser still in use. See §5 |
 
 ---
 
@@ -237,13 +237,21 @@ only fix is publishing to Production — which requires a home page, a privacy
 policy URL, and a verifiable authorised domain. A local single-user tool has
 none of those, so OAuth means re-authorising weekly, forever.
 
-Browser credentials last roughly two years while the session stays valid, and
-need no Google Cloud project at all.
+Browser credentials need no Google Cloud project at all. ytmusicapi says they
+last "about 2 years unless you log out" — **measured, they did not**: two
+captures taken from the user's everyday browser died within about 6 days and
+within about 1 day (2026-09-24 and 2026-09-30). That fits what yt-dlp
+documents: "YouTube rotates account cookies frequently on open YouTube browser
+tabs", so a copy taken from a session that stays in use goes stale. Its
+remedy, adopted here, is to capture from a **private window** and close it so
+the session is never opened again (proxy/README.md). Whether that copy then
+lasts is not yet measured. If it also dies within days, browser auth is no
+longer-lived than OAuth's 7 days and D22 must be revisited.
 
 | | OAuth | Browser auth |
 |---|---|---|
 | Google Cloud project | Required | None |
-| Lifetime | 7 days unless published | ~2 years |
+| Lifetime | 7 days unless published | Claimed ~2 years; measured ≤6 days from an in-use browser |
 | Publishing prerequisites | Domain + privacy policy | — |
 | Playlist editing | Yes | Yes |
 

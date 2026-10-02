@@ -44,12 +44,25 @@ tell a live session from an expired one.
 
 ## When the session expires
 
-Google expires browser sessions without warning. The app then says "Your
-YouTube Music session has expired". Run `ytmusicapi browser` again (with the
-request headers from a signed-in music.youtube.com tab — not a private
-window), copy the new `browser.json` over the old one here, and reload. No
-restart is needed: the proxy drops a session that fails and reads the file
-afresh on the next request.
+The app says "Your YouTube Music session has expired" when YouTube stops
+accepting the stored session. The usual cause: YouTube rotates the cookies of
+any session that stays open in a browser tab, so headers copied from the
+browser you use every day go stale within days (measured: 6 days, then 1).
+
+Capture from a session nothing else will touch:
+
+1. Open a **new private window** and sign in to music.youtube.com there.
+2. Open devtools → Network, filter `browse`, click around until a `browse`
+   request appears, and copy its request headers (Firefox: toggle **Raw**).
+3. Run `ytmusicapi browser` from a directory outside this repo, paste, then
+   Ctrl+Z and Enter.
+4. **Close the private window.** Do not sign out first, and do not open that
+   session again — signing out kills it outright.
+5. Copy the new `browser.json` over the old one here, and reload the app.
+
+No restart is needed: the proxy drops a session that fails and reads the file
+afresh on the next request. Using YouTube Music normally in your everyday
+browser is fine; that is a separate session.
 
 If `ytmusicapi` is not found, pip installed it into a Scripts folder that is
 not on PATH — Microsoft Store Python does this. Add

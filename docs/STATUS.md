@@ -230,8 +230,14 @@ Three of these contradicted the documentation:
 OAuth dead-ends for a local single-user tool. Google expires refresh tokens
 after **7 days** for any External app in Testing status, and `youtube` is not
 an exempt scope; publishing to Production needs a home page, privacy policy
-and a verifiable authorised domain. Browser auth needs no Google Cloud project
-and lasts roughly two years. Recorded as D22 with the evidence.
+and a verifiable authorised domain. Browser auth needs no Google Cloud project.
+Recorded as D22 with the evidence.
+
+Its lifetime is **not** the "about 2 years" ytmusicapi claims. Two captures
+from the everyday browser died within ~6 days and ~1 day: YouTube rotates the
+cookies of a session left open in a tab, so the copy goes stale. Capture from
+a private window and close it (proxy/README.md). Whether that lasts is not yet
+measured — if it dies within days too, D22 needs revisiting.
 
 `ytmusicapi` labels browser auth deprecated, so it is **pinned to `==1.12.3`**.
 Checked rather than assumed: as of that version it is a soft deprecation —
