@@ -8,6 +8,7 @@ Direction contract: `.impeccable/surfaces/src-app-jsx.md`.
 Design system: [../DESIGN.md](../DESIGN.md).
 
 Planned work: [ROADMAP.md](ROADMAP.md).
+Simplification backlog (not applied): [2026-10-05-simplification-audit.md](2026-10-05-simplification-audit.md).
 
 This file tracks only what is built and what is next.
 
