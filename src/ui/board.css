@@ -1096,3 +1096,51 @@
   padding: 10px 12px;
   color: var(--flap-faint);
 }
+
+/* ---- Match review board ---------------------------------------------- */
+
+/* Spotify | YouTube | length | why | actions. Declared once per breakpoint
+   (the Single Grid Declaration Rule). */
+.board-review {
+  --cols: minmax(0, 1fr) minmax(0, 1fr) 9ch minmax(0, 0.8fr) 24ch;
+}
+
+.review-group {
+  padding: 18px clamp(10px, 1.4vw, 18px) 8px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.review-settled > summary {
+  cursor: pointer;
+}
+
+.review-settled > summary::marker {
+  color: var(--flap-dim);
+}
+
+.review-levers {
+  gap: 6px;
+}
+
+.lever-quiet.is-compact {
+  padding: 5px 12px;
+}
+
+.field-compact {
+  padding: 5px 8px;
+  font-size: var(--fs-sub);
+}
+
+.row-play {
+  color: var(--flap);
+}
+
+@media (max-width: 680px) {
+  .board-review {
+    --cols: minmax(0, 1fr) minmax(0, 1fr) 7ch 20ch;
+  }
+
+  .board-review .col-why {
+    display: none;
+  }
+}

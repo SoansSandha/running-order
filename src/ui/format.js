@@ -52,3 +52,13 @@ export function titleOf(track) {
   if (track.isUnavailable) return 'Unavailable track'
   return track.name || 'Untitled'
 }
+
+/**
+ * A signed duration difference in whole seconds: "+7s", "−2s", "0s". The sign
+ * is the point — it says which side runs longer — so it uses a true minus.
+ */
+export function formatDelta(ms) {
+  const seconds = Math.round((ms ?? 0) / 1000)
+  if (seconds === 0) return '0s'
+  return `${seconds > 0 ? '+' : '−'}${Math.abs(seconds)}s`
+}

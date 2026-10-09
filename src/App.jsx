@@ -3,6 +3,7 @@ import { ConnectScreen } from './ui/screens/Connect.jsx'
 import { PlaylistsScreen } from './ui/screens/Playlists.jsx'
 import { PreviewScreen } from './ui/screens/Preview.jsx'
 import { ProgressScreen } from './ui/screens/Progress.jsx'
+import { ReviewScreen } from './ui/screens/Review.jsx'
 import { SortScreen } from './ui/screens/Sort.jsx'
 import { setFieldProjection } from './services/spotify/playlists.js'
 import { enableApiLog } from './ui/apiLog.js'
@@ -44,7 +45,9 @@ export default function App() {
         ? <PreviewScreen app={app} />
         : app.screen === 'progress'
           ? <ProgressScreen app={app} />
-          : <PlaylistsScreen app={app} auth={auth} />
+          : app.screen === 'review'
+            ? <ReviewScreen app={app} />
+            : <PlaylistsScreen app={app} auth={auth} />
 
   return (
     <>

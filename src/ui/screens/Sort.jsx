@@ -154,6 +154,11 @@ export function SortScreen({ app }) {
       </div>
 
       <LeverRow sticky>
+        {capabilitySource === 'spotify' ? (
+          <QuietLever onClick={() => setScreen('review')} disabled={!ready}>
+            Match to YouTube
+          </QuietLever>
+        ) : null}
         <span className="spacer" />
         <Lever onClick={() => setScreen('preview')} disabled={!ready}>
           Preview the change

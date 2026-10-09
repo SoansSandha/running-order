@@ -455,6 +455,7 @@ export function useSorterApp(auth, demo = null) {
     capabilitySource,
     writeBlocked,
     setSource: changeSource,
+    youtube,
     me,
     playlists,
     busy,
