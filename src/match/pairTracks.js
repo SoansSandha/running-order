@@ -155,9 +155,22 @@ export function pairTracks(spotifyTracks, youtubeTracks, options) {
 /**
  * Candidates for pairing a track by hand, most similar title first (D25).
  * Ties keep their playlist order; the input array is not changed.
+ *
+ * M-1: plain Dice over the whole folded title ranks a label-channel upload
+ * too low — its title is the real one plus a long run of credits, which
+ * dilutes the bigram overlap. A candidate whose folded title CONTAINS the
+ * target's (3+ characters, so this never fires on a near-empty title) gets a
+ * point added ahead of Dice, which is enough to clear a merely similar but
+ * unrelated title without ever beating an exact match (Dice tops out at 1).
  */
 export function closestTitles(track, candidates) {
   const title = foldTitle(track?.name)
-  const similarity = new Map(candidates.map((candidate) => [candidate, diceCoefficient(title, foldTitle(candidate?.name))]))
+  const similarity = new Map(
+    candidates.map((candidate) => {
+      const folded = foldTitle(candidate?.name)
+      const contains = title.length > 2 && folded.includes(title) ? 1 : 0
+      return [candidate, contains + diceCoefficient(title, folded)]
+    }),
+  )
   return candidates.toSorted((a, b) => similarity.get(b) - similarity.get(a))
 }

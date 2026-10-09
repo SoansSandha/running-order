@@ -31,17 +31,37 @@ export function useMatchReview({ youtube, spotifyTracks, storage = globalThis.lo
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const latest = useRef(0)
+  const lastDecisionAt = useRef(0)
 
-  useEffect(() => {
+  // I-2: Confirm/Reject/Undo remove a row, the next one slides under the
+  // pointer, and the second click of a double-click decides it too.
+  // ponytail: a deliberate second click inside 400ms is dropped along with
+  // the accidental one.
+  const recentlyDecided = useCallback(() => {
+    const now = Date.now()
+    if (now - lastDecisionAt.current < 400) return true
+    lastDecisionAt.current = now
+    return false
+  }, [])
+
+  // I-1: lifted out of the effect so the red Notice's "Try again" can re-run
+  // the same load without the user leaving the screen.
+  const loadPlaylists = useCallback(() => {
     let live = true
     youtube
       .listPlaylists()
-      .then((raw) => live && setYoutubePlaylists(toAppPlaylists(raw)))
+      .then((raw) => {
+        if (!live) return
+        setYoutubePlaylists(toAppPlaylists(raw))
+        setError(null)
+      })
       .catch((failure) => live && setError(failure.message))
     return () => {
       live = false
     }
   }, [youtube])
+
+  useEffect(() => loadPlaylists(), [loadPlaylists])
 
   const choose = useCallback(
     async (playlistId) => {
@@ -53,7 +73,12 @@ export function useMatchReview({ youtube, spotifyTracks, storage = globalThis.lo
       setYoutubeTracks([])
       setUnavailable(0)
       setError(null)
-      if (!playlistId) return
+      if (!playlistId) {
+        // I-3: picking the placeholder takes a new ticket, so the load it
+        // superseded skips its own `finally` and never clears the meter.
+        setBusy(null)
+        return
+      }
       try {
         setBusy('Reading the YouTube playlist')
         const fetched = await youtube.fetchPlaylist(playlistId)
@@ -68,7 +93,12 @@ export function useMatchReview({ youtube, spotifyTracks, storage = globalThis.lo
         setUnavailable(Math.max(0, (fetched.counted ?? 0) - (fetched.readable ?? 0)))
         setScored(candidates)
       } catch (failure) {
-        if (ticket === latest.current) setError(failure.message)
+        if (ticket === latest.current) {
+          setError(failure.message)
+          // I-1: back to the placeholder, so picking the same playlist again
+          // fires a change event and retries the fetch.
+          setChosenId(null)
+        }
       } finally {
         if (ticket === latest.current) setBusy(null)
       }
@@ -90,34 +120,54 @@ export function useMatchReview({ youtube, spotifyTracks, storage = globalThis.lo
   )
 
   const decide = useCallback(
-    (spotifyTrack, youtubeTrack, verdict) =>
-      commit(
-        recordDecision(book, { spotifyKey: spotifyKeyOf(spotifyTrack), youtubeVideoId: youtubeTrack.id, verdict }),
-      ),
-    [book, commit],
+    (spotifyTrack, youtubeTrack, verdict) => {
+      if (recentlyDecided()) return
+      const spotifyKey = spotifyKeyOf(spotifyTrack)
+      // M-3: a track Spotify or YouTube no longer serves has no key to file
+      // the decision under.
+      if (spotifyKey == null || youtubeTrack?.id == null) return
+      commit(recordDecision(book, { spotifyKey, youtubeVideoId: youtubeTrack.id, verdict }))
+    },
+    [book, commit, recentlyDecided],
   )
 
   // One save for the whole group, not one per pair.
   const confirmAll = useCallback(
-    (pairs) =>
+    (pairs) => {
+      if (recentlyDecided()) return
       commit(
-        pairs.reduce(
-          (next, pair) =>
-            recordDecision(next, {
-              spotifyKey: spotifyKeyOf(pair.spotify),
-              youtubeVideoId: pair.youtube.id,
-              verdict: 'same',
-            }),
-          book,
-        ),
-      ),
-    [book, commit],
+        pairs.reduce((next, pair) => {
+          const spotifyKey = spotifyKeyOf(pair.spotify)
+          if (spotifyKey == null || pair.youtube?.id == null) return next // M-3
+          return recordDecision(next, { spotifyKey, youtubeVideoId: pair.youtube.id, verdict: 'same' })
+        }, book),
+      )
+    },
+    [book, commit, recentlyDecided],
   )
 
   const undo = useCallback(
-    (pair) => commit(forgetDecision(book, spotifyKeyOf(pair.spotify), pair.youtube.id)),
-    [book, commit],
+    (pair) => {
+      if (recentlyDecided()) return
+      const spotifyKey = spotifyKeyOf(pair.spotify)
+      if (spotifyKey == null || pair.youtube?.id == null) return // M-3
+      commit(forgetDecision(book, spotifyKey, pair.youtube.id))
+    },
+    [book, commit, recentlyDecided],
   )
 
-  return { youtubePlaylists, chosenId, choose, result, unavailable, busy, error, remembered, decide, confirmAll, undo }
+  return {
+    youtubePlaylists,
+    chosenId,
+    choose,
+    retryPlaylists: loadPlaylists,
+    result,
+    unavailable,
+    busy,
+    error,
+    remembered,
+    decide,
+    confirmAll,
+    undo,
+  }
 }

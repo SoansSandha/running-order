@@ -258,4 +258,21 @@ describe('pairTracks', () => {
     const options = [yt('y1', 'Qqq', 'Other', 1000), yt('y2', 'Zzz', 'Other', 1000)]
     expect(closestTitles(target, options).map((track) => track.id)).toEqual(['y1', 'y2'])
   })
+
+  test('a label-channel upload that contains the whole title outranks a shorter title that only resembles it (M-1)', () => {
+    // Verbatim from the live libraries: the label-channel upload (root cause
+    // 8) scores lower on plain Dice than two shorter, merely similar titles.
+    const target = sp('s1', 'No Need', 'Karan Aujla', 189000)
+    const options = [
+      yt('y1', 'Need You', 'Someone', 200000),
+      yt('y2', 'Nee Nee', 'Other', 180000),
+      yt(
+        'y3',
+        'No Need (Full Video) Karan Aujla | Deep Jandu | Rupan Bal | Latest Punjabi song 2019',
+        'Rehaan Records',
+        189000,
+      ),
+    ]
+    expect(closestTitles(target, options)[0].id).toBe('y3')
+  })
 })

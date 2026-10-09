@@ -77,6 +77,11 @@ export function ReviewScreen({ app }) {
         <div className="section">
           <Notice tone="red" title="Could not read YouTube Music">
             {review.error}
+            <div style={{ marginTop: 10 }}>
+              <QuietLever className="lever-quiet is-compact" onClick={review.retryPlaylists}>
+                Try again
+              </QuietLever>
+            </div>
           </Notice>
         </div>
       ) : null}
@@ -84,7 +89,7 @@ export function ReviewScreen({ app }) {
       {review.remembered ? null : (
         <div className="section">
           <Notice tone="amber" title="Decisions will not be remembered">
-            This browser is blocking storage for the page, so these decisions last only until the tab closes.
+            This browser is blocking storage for the page, so these decisions last only while this screen is open.
           </Notice>
         </div>
       )}
@@ -156,7 +161,7 @@ export function ReviewScreen({ app }) {
       <LeverRow>
         <span className="spacer" />
         <Lever disabled={strong.length === 0} onClick={() => review.confirmAll(strong)}>
-          Confirm all {formatCount(strong.length)} strong
+          Confirm all <span className="num">{formatCount(strong.length)}</span> strong
         </Lever>
       </LeverRow>
     </Frame>
