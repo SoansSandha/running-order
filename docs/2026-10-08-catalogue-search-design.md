@@ -140,8 +140,9 @@ again.
   passing ytmusicapi's results through. It holds no logic (D13).
 - **YouTube client:** `search(query, filter, limit)`. Search results carry no
   `setVideoId`, so they are normalized by a variant of
-  `normalizeYouTubeTracks` that does not require one; a `songs` result with no
-  `videoType` is read as an album track (ATV).
+  `normalizeYouTubeTracks` that does not require one. Every recorded result
+  carries a `videoType`, so none is defaulted; an untyped one would be judged
+  by `scorePair`'s existing rule.
 - **Spotify:** `searchTracks(client, query)` through the existing client, which
   already waits out a 429's `Retry-After`. Results are normalized by
   `normalizePlaylistItem`.
