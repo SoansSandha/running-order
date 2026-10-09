@@ -6,32 +6,57 @@
  *
  * Every pair this returns is a PROPOSAL. Only a verdict of 'same' — a human
  * having already confirmed that exact pair — comes back as certain (D15).
+ *
+ * Split in two for the match review: scoring is the slow half and runs once
+ * per review; settling applies decisions and claims pairs, and reruns after
+ * every click. See docs/2026-10-05-match-review-design.md §5.
  */
 
-import { scorePair, videoTypeRank } from './scorePair.js'
+import { diceCoefficient } from '../csv/match.js'
+import { spotifyKeyOf } from './matchBook.js'
+import { foldTitle, scorePair, videoTypeRank } from './scorePair.js'
 
 const TIER_RANK = { certain: 3, strong: 2, likely: 1 }
 
 /**
+ * Every pair scorePair proposes, before any decision is applied. The slow
+ * half: 160,930 scorePair calls, about 0.35s, for the live playlists.
+ */
+export function scoreCandidates(spotifyTracks, youtubeTracks) {
+  const candidates = []
+  for (const left of spotifyTracks ?? []) {
+    for (const right of youtubeTracks ?? []) {
+      const scored = scorePair(left, right)
+      if (scored) candidates.push({ spotify: left, youtube: right, ...scored })
+    }
+  }
+  return candidates
+}
+
+/**
+ * Apply the user's decisions to scored candidates and claim pairs. Never
+ * calls scorePair, so it is cheap enough to rerun after every decision.
+ *
+ * Decisions are looked up by spotifyKeyOf, not by id: a local file has none.
+ *
  * @param {Array} spotifyTracks
  * @param {Array} youtubeTracks
- * @param {{verdictFor?: (spotifyId: string, youtubeVideoId: string) => string|null}} [options]
+ * @param {Array} scored what scoreCandidates returned for these two lists
+ * @param {{verdictFor?: (spotifyKey: string, youtubeVideoId: string) => string|null}} [options]
  */
-export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
+export function settlePairs(spotifyTracks, youtubeTracks, scored, { verdictFor } = {}) {
   const spotify = spotifyTracks ?? []
   const youtube = youtubeTracks ?? []
+  const verdictOf = (left, right) => verdictFor?.(spotifyKeyOf(left), right?.id) ?? null
 
-  // Every candidate, scored once, then sorted so the best claim is settled
-  // first. Doing it in input order would let a weak early pair take a track
-  // a strong later pair needed.
   const candidates = []
-  for (const left of spotify) {
-    for (const right of youtube) {
-      const verdict = verdictFor?.(left?.id, right?.id) ?? null
-      // A dismissed pair is gone for good, not re-proposed every sync (D16).
-      if (verdict === 'different') continue
-
-      if (verdict === 'same') {
+  // A confirmed pair is certain whether or not the matcher proposed it, which
+  // is what makes pairing by hand work (D25). Looking every pair up is cheap;
+  // scoring them is the part that is not.
+  if (verdictFor) {
+    for (const left of spotify) {
+      for (const right of youtube) {
+        if (verdictOf(left, right) !== 'same') continue
         candidates.push({
           spotify: left,
           youtube: right,
@@ -39,12 +64,13 @@ export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
           durationDeltaMs: (right?.durationMs ?? 0) - (left?.durationMs ?? 0),
           reason: 'You confirmed this pair before',
         })
-        continue
       }
-
-      const scored = scorePair(left, right)
-      if (scored) candidates.push({ spotify: left, youtube: right, ...scored })
     }
+  }
+  // A dismissed pair is gone for good, not re-proposed every sync (D16); a
+  // confirmed one is already in the list above.
+  for (const candidate of scored ?? []) {
+    if (verdictOf(candidate.spotify, candidate.youtube) === null) candidates.push(candidate)
   }
 
   candidates.sort((a, b) => {
@@ -61,7 +87,8 @@ export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
     // to insertion order, i.e. input order. That is not a total order: reversing
     // one of the input arrays could then pick a different winner for a
     // contested track and drop a real match. Break the remaining tie on the
-    // ids themselves so the ordering never depends on array position.
+    // keys themselves so the ordering never depends on array position. The
+    // Spotify key, not the id: two local files both have a null id.
     //
     // Plain `<` here, not `localeCompare`: localeCompare with no locale
     // argument is ICU- and host-locale-dependent BY SPECIFICATION, so it can
@@ -72,9 +99,9 @@ export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
     // relational comparison on strings is a UTF-16 code-unit comparison,
     // which is spec-guaranteed and has no locale or ICU dependency — do not
     // "simplify" this back to localeCompare.
-    const aSpotifyId = String(a.spotify?.id ?? '')
-    const bSpotifyId = String(b.spotify?.id ?? '')
-    if (aSpotifyId !== bSpotifyId) return aSpotifyId < bSpotifyId ? -1 : 1
+    const aSpotifyKey = String(spotifyKeyOf(a.spotify) ?? '')
+    const bSpotifyKey = String(spotifyKeyOf(b.spotify) ?? '')
+    if (aSpotifyKey !== bSpotifyKey) return aSpotifyKey < bSpotifyKey ? -1 : 1
     const aYoutubeId = String(a.youtube?.id ?? '')
     const bYoutubeId = String(b.youtube?.id ?? '')
     if (aYoutubeId !== bYoutubeId) return aYoutubeId < bYoutubeId ? -1 : 1
@@ -114,4 +141,23 @@ export function pairTracks(spotifyTracks, youtubeTracks, { verdictFor } = {}) {
       unmatchedYoutube: unmatchedYoutube.length,
     },
   }
+}
+
+/**
+ * @param {Array} spotifyTracks
+ * @param {Array} youtubeTracks
+ * @param {{verdictFor?: (spotifyKey: string, youtubeVideoId: string) => string|null}} [options]
+ */
+export function pairTracks(spotifyTracks, youtubeTracks, options) {
+  return settlePairs(spotifyTracks, youtubeTracks, scoreCandidates(spotifyTracks, youtubeTracks), options)
+}
+
+/**
+ * Candidates for pairing a track by hand, most similar title first (D25).
+ * Ties keep their playlist order; the input array is not changed.
+ */
+export function closestTitles(track, candidates) {
+  const title = foldTitle(track?.name)
+  const similarity = new Map(candidates.map((candidate) => [candidate, diceCoefficient(title, foldTitle(candidate?.name))]))
+  return candidates.toSorted((a, b) => similarity.get(b) - similarity.get(a))
 }

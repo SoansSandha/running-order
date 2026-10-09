@@ -305,7 +305,7 @@ function foldArtist(name) {
  * title folded to its Latin words alone — two different Gurmukhi songs that
  * both end in "(Live)" both read as "live" and met as strong.
  */
-function foldTitle(text) {
+export function foldTitle(text) {
   return NON_LATIN_LETTER.test(String(text ?? '')) ? foldAnyScript(text) : matchText(text)
 }
 

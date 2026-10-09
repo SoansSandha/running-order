@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { pairTracks } from './pairTracks.js'
+import { closestTitles, pairTracks, settlePairs } from './pairTracks.js'
 
 // Every track carries an album, as catalogue audio does: scorePair reads an
 // untyped YouTube row WITHOUT one as a video, which has a wider length window.
@@ -162,5 +162,100 @@ describe('pairTracks', () => {
     expect(forward.unmatchedSpotify.map((t) => t.id)).toEqual(['a1'])
     expect(reversed.pairs[0].spotify.id).toBe('Z1')
     expect(reversed.unmatchedSpotify.map((t) => t.id)).toEqual(['a1'])
+  })
+
+  test('settling uses the scored candidates it is given, without rescoring', () => {
+    // scorePair rejects this pair outright (different artist, 112s apart), so
+    // the only way it can come back paired is from the list handed in.
+    const s = sp('s1', 'Antidote', 'Karan Aujla', 188000)
+    const y = yt('y1', 'Something Else Entirely', 'Nobody', 300000)
+    const scored = [{ spotify: s, youtube: y, tier: 'strong', durationDeltaMs: 0, reason: 'handed in' }]
+    const result = settlePairs([s], [y], scored)
+    expect(result.pairs.map((pair) => pair.reason)).toEqual(['handed in'])
+  })
+
+  test('a rejected pair re-pairs the Spotify song with its next-best match', () => {
+    const s1 = sp('s1', 'Antidote', 'Karan Aujla', 188000)
+    const y1 = yt('y1', 'Antidote', 'Karan Aujla', 188000)
+    const y2 = yt('y2', 'Antidote', 'Karan Aujla', 191000)
+    const verdictFor = (key, videoId) => (key === 's1' && videoId === 'y1' ? 'different' : null)
+    const result = pairTracks([s1], [y1, y2], { verdictFor })
+    expect(result.pairs.map((pair) => [pair.spotify.id, pair.youtube.id, pair.tier])).toEqual([['s1', 'y2', 'likely']])
+    expect(result.unmatchedYoutube.map((track) => track.id)).toEqual(['y1'])
+  })
+
+  test('a rejected pair frees its YouTube track for the next Spotify song that wanted it', () => {
+    const s1 = sp('s1', 'Antidote', 'Karan Aujla', 188000)
+    const s2 = sp('s2', 'Antidote', 'Karan Aujla', 191000)
+    const y1 = yt('y1', 'Antidote', 'Karan Aujla', 188000)
+    const verdictFor = (key, videoId) => (key === 's1' && videoId === 'y1' ? 'different' : null)
+    const result = pairTracks([s1, s2], [y1], { verdictFor })
+    expect(result.pairs.map((pair) => [pair.spotify.id, pair.youtube.id, pair.tier])).toEqual([['s2', 'y1', 'likely']])
+    expect(result.unmatchedSpotify.map((track) => track.id)).toEqual(['s1'])
+  })
+
+  test('a pair made by hand is certain even where the matcher proposes nothing', () => {
+    // Verbatim from the live libraries: a label-channel upload, credited to
+    // the label, which scorePair deliberately never pairs (root cause 8).
+    const s = sp('s1', 'No Need', 'Karan Aujla', 189000)
+    const y = yt(
+      'y1',
+      'No Need (Full Video) Karan Aujla | Deep Jandu | Rupan Bal | Latest Punjabi song 2019',
+      'Rehaan Records',
+      189000,
+    )
+    expect(pairTracks([s], [y]).pairs).toHaveLength(0)
+    const result = pairTracks([s], [y], { verdictFor: () => 'same' })
+    expect(result.pairs.map((pair) => pair.tier)).toEqual(['certain'])
+  })
+
+  test('a pair made by hand takes its YouTube track ahead of the matcher', () => {
+    const s1 = sp('s1', 'Antidote', 'Karan Aujla', 188000)
+    const s2 = sp('s2', 'Intro', 'Karan Aujla', 60000)
+    const y1 = yt('y1', 'Antidote', 'Karan Aujla', 188000)
+    const verdictFor = (key, videoId) => (key === 's2' && videoId === 'y1' ? 'same' : null)
+    const result = pairTracks([s1, s2], [y1], { verdictFor })
+    expect(result.pairs.map((pair) => [pair.spotify.id, pair.youtube.id, pair.tier])).toEqual([['s2', 'y1', 'certain']])
+    expect(result.unmatchedSpotify.map((track) => track.id)).toEqual(['s1'])
+  })
+
+  test('a decision about a local file is found by its URI', () => {
+    // Verbatim from the live libraries: a local file (no id) that the matcher
+    // pairs as likely, 7s and one spelling apart.
+    const local = {
+      ...sp(null, 'Haye Mera Dil', 'Alfaaz; Yo Yo Honey Singh', 203000),
+      uri: 'spotify:local:Alfaaz%3B+Yo+Yo+Honey+Singh:Boy+Next+Door:Haye+Mera+Dil:203',
+      isLocal: true,
+    }
+    const y = yt('y1', 'Hai Mera Dil', 'Alfaaz', 210000)
+    expect(pairTracks([local], [y]).pairs).toHaveLength(1)
+    const verdictFor = (key, videoId) => (key === local.uri && videoId === 'y1' ? 'different' : null)
+    expect(pairTracks([local], [y], { verdictFor }).pairs).toHaveLength(0)
+  })
+
+  test('the same song listed twice on Spotify claims one YouTube copy once', () => {
+    const first = sp('s1', 'Antidote', 'Karan Aujla', 188000)
+    const again = sp('s1', 'Antidote', 'Karan Aujla', 188000)
+    const y = yt('y1', 'Antidote', 'Karan Aujla', 188000)
+    const result = pairTracks([first, again], [y], { verdictFor: () => 'same' })
+    expect(result.pairs).toHaveLength(1)
+    expect(result.unmatchedSpotify).toHaveLength(1)
+  })
+
+  test('candidates for pairing by hand come most similar title first', () => {
+    const target = sp('s1', 'Maar Sutya', 'Amrinder Gill', 239106)
+    const options = [
+      yt('y1', 'Antidote', 'Karan Aujla', 188000),
+      yt('y2', 'Maar Sutiya', 'Amrinder Gill', 237000),
+      yt('y3', 'Hai Mera Dil', 'Alfaaz', 210000),
+    ]
+    expect(closestTitles(target, options)[0].id).toBe('y2')
+    expect(options.map((track) => track.id)).toEqual(['y1', 'y2', 'y3'])
+  })
+
+  test('candidates with equally dissimilar titles keep their playlist order', () => {
+    const target = sp('s1', 'Abc', 'Someone', 1000)
+    const options = [yt('y1', 'Qqq', 'Other', 1000), yt('y2', 'Zzz', 'Other', 1000)]
+    expect(closestTitles(target, options).map((track) => track.id)).toEqual(['y1', 'y2'])
   })
 })
