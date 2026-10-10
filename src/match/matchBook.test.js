@@ -4,7 +4,9 @@ import {
   loadMatchBook,
   recordDecision,
   saveMatchBook,
+  snapshotOf,
   spotifyKeyOf,
+  trackFromSnapshot,
   verdictLookup,
 } from './matchBook.js'
 
@@ -126,5 +128,86 @@ describe('storing the match book', () => {
 
   test('a store that refuses to be written says so', () => {
     expect(saveMatchBook([], blockedStorage)).toBe(false)
+  })
+})
+
+describe('a confirmed find', () => {
+  // Verbatim from a live YouTube Music search: AJA is on YouTube only as a video.
+  const ajaVideo = {
+    id: 'q7e348rz27I',
+    uri: null,
+    name: 'AJA - Kaléra (Feat. Jaski)',
+    artists: [{ id: null, name: 'Kaléra' }],
+    durationMs: 136000,
+    videoType: 'MUSIC_VIDEO_TYPE_OMV',
+  }
+  const confirmed = (found) =>
+    recordDecision([], { spotifyKey: '54GK1bZMOAMXKysrnH4vTp', youtubeVideoId: 'q7e348rz27I', verdict: 'same', found }, 1)
+
+  test('keeps its snapshot through a save and a load', () => {
+    const storage = memoryStorage()
+    const book = confirmed(snapshotOf(ajaVideo, 'youtube'))
+    saveMatchBook(book, storage)
+    expect(loadMatchBook(storage)).toEqual(book)
+    expect(book[0].found).toEqual({
+      side: 'youtube',
+      name: 'AJA - Kaléra (Feat. Jaski)',
+      artists: ['Kaléra'],
+      durationMs: 136000,
+      videoType: 'MUSIC_VIDEO_TYPE_OMV',
+      uri: null,
+    })
+  })
+
+  test('a decision with no find has no snapshot key at all', () => {
+    expect(Object.keys(recordDecision([], same('s1', 'y1'), 1)[0])).toEqual([
+      'spotifyKey',
+      'youtubeVideoId',
+      'verdict',
+      'decidedAt',
+    ])
+  })
+
+  test('a snapshot that is not one is dropped on load, and the decision kept', () => {
+    const storage = memoryStorage()
+    storage.setItem(
+      'playlist-sorter:match-book',
+      JSON.stringify([{ spotifyKey: 's1', youtubeVideoId: 'y1', verdict: 'same', decidedAt: 1, found: 'garbage' }]),
+    )
+    expect(loadMatchBook(storage)).toEqual([{ spotifyKey: 's1', youtubeVideoId: 'y1', verdict: 'same', decidedAt: 1 }])
+  })
+
+  test('rebuilds the found YouTube track from its snapshot', () => {
+    const [decision] = confirmed(snapshotOf(ajaVideo, 'youtube'))
+    expect(trackFromSnapshot(decision)).toMatchObject({
+      id: 'q7e348rz27I',
+      name: 'AJA - Kaléra (Feat. Jaski)',
+      primaryArtist: { id: null, name: 'Kaléra' },
+      durationMs: 136000,
+      videoType: 'MUSIC_VIDEO_TYPE_OMV',
+      source: 'youtube',
+    })
+  })
+
+  test('rebuilds a found Spotify track under its Spotify id, with its URI', () => {
+    const sheesha = {
+      id: '1MGHB7pXahNVdHxKPbMvdx',
+      uri: 'spotify:track:1MGHB7pXahNVdHxKPbMvdx',
+      name: 'Sheesha',
+      artists: [{ id: 'x', name: 'Karan Aujla' }],
+      durationMs: 161000,
+      videoType: null,
+    }
+    const [decision] = recordDecision(
+      [],
+      { spotifyKey: sheesha.id, youtubeVideoId: 'sheeshaOMV', verdict: 'same', found: snapshotOf(sheesha, 'spotify') },
+      1,
+    )
+    expect(trackFromSnapshot(decision)).toMatchObject({
+      id: '1MGHB7pXahNVdHxKPbMvdx',
+      uri: 'spotify:track:1MGHB7pXahNVdHxKPbMvdx',
+      name: 'Sheesha',
+      source: 'spotify',
+    })
   })
 })

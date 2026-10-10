@@ -22,7 +22,7 @@ export function spotifyKeyOf(track) {
 export function loadMatchBook(storage = globalThis.localStorage) {
   try {
     const parsed = JSON.parse(storage?.getItem(KEY) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter(isDecision) : []
+    return Array.isArray(parsed) ? parsed.filter(isDecision).map(withValidFind) : []
   } catch {
     return []
   }
@@ -42,9 +42,53 @@ export function saveMatchBook(book, storage = globalThis.localStorage) {
   }
 }
 
-/** The book with this pair's decision set, replacing any earlier one. */
-export function recordDecision(book, { spotifyKey, youtubeVideoId, verdict }, decidedAt = Date.now()) {
-  return [...forgetDecision(book, spotifyKey, youtubeVideoId), { spotifyKey, youtubeVideoId, verdict, decidedAt }]
+/**
+ * The book with this pair's decision set, replacing any earlier one. A
+ * confirmed find carries a snapshot of the found track (D29).
+ */
+export function recordDecision(book, { spotifyKey, youtubeVideoId, verdict, found }, decidedAt = Date.now()) {
+  const entry = { spotifyKey, youtubeVideoId, verdict, decidedAt }
+  if (found) entry.found = found
+  return [...forgetDecision(book, spotifyKey, youtubeVideoId), entry]
+}
+
+/**
+ * What a confirmed find keeps of the found track. The track is in neither
+ * playlist, so after a reload nothing else knows it (catalogue search design
+ * §7). `uri` is what a Plan C add to Spotify needs.
+ *
+ * @param {object} track
+ * @param {'youtube'|'spotify'} side which service the track is from
+ */
+export function snapshotOf(track, side) {
+  return {
+    side,
+    name: track?.name ?? '',
+    artists: (track?.artists ?? []).map((artist) => artist?.name ?? ''),
+    durationMs: track?.durationMs ?? 0,
+    videoType: track?.videoType ?? null,
+    uri: track?.uri ?? null,
+  }
+}
+
+/** The found track a decision's snapshot describes, in the app's Track shape. */
+export function trackFromSnapshot(decision) {
+  const { found } = decision
+  const artists = found.artists.map((name) => ({ id: null, name }))
+  return {
+    id: found.side === 'youtube' ? decision.youtubeVideoId : decision.spotifyKey,
+    uri: found.uri,
+    name: found.name,
+    artists,
+    primaryArtist: artists[0] ?? null,
+    album: { id: null, name: '', releaseDate: null, releaseDatePrecision: null },
+    durationMs: found.durationMs,
+    videoType: found.videoType,
+    source: found.side,
+    isLocal: false,
+    isUnavailable: false,
+    isEpisode: false,
+  }
 }
 
 /** The book without this pair's decision. */
@@ -71,5 +115,22 @@ function isDecision(entry) {
     typeof entry?.spotifyKey === 'string' &&
     typeof entry?.youtubeVideoId === 'string' &&
     VERDICTS.has(entry?.verdict)
+  )
+}
+
+/** A decision whose `found` is not a snapshot keeps the decision and loses the `found`. */
+function withValidFind(entry) {
+  if (entry.found === undefined || isSnapshot(entry.found)) return entry
+  const kept = { ...entry }
+  delete kept.found
+  return kept
+}
+
+function isSnapshot(found) {
+  return (
+    (found?.side === 'youtube' || found?.side === 'spotify') &&
+    typeof found.name === 'string' &&
+    Array.isArray(found.artists) &&
+    Number.isFinite(found.durationMs)
   )
 }
