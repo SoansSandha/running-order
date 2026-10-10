@@ -188,8 +188,9 @@ found track: `missingFrom: 'youtube' | 'spotify'`.
   near misses and the unmatched Spotify songs.
 - **Settled** shows confirmed finds with the same marker, and Undo.
 - **The lever row** holds **Search all unmatched** beside Confirm all strong.
-  While a sweep runs, it shows the progress line, a meter and **Stop**. At the
-  end, if any searches failed, "N searches failed".
+  While a sweep runs, its progress line, meter and **Stop** show in a section
+  above the board, and deciding waits (see §8). At the end, any failed
+  searches are counted there.
 - Rows are keyed by their playlist-side track: a found track's position in a
   search result is not unique.
 
@@ -216,11 +217,12 @@ load; the decision itself is kept.
 
 | Situation | What the review screen shows |
 |---|---|
-| Proxy not running, or the YouTube session expired | The YouTube half stops with the existing message; the Spotify half carries on |
-| Spotify rate limit (429) | The client waits out `Retry-After`, as it does for writes |
+| Proxy not running | The YouTube half stops with the existing message; the Spotify half carries on |
+| YouTube session expired | Search does not need the session (the probe searched signed out), so it is expected to carry on; a refusal shows as failed searches, counted at the end |
+| Spotify rate limit (429) | The client waits out `Retry-After`; if Spotify still refuses after its retries, the Spotify half stops with a red notice, and Search all unmatched later resumes with the songs not yet searched |
 | Spotify session cannot be refreshed | The Spotify half stops with a red notice; the YouTube half carries on |
 | One search fails | That song is skipped and counted; "N searches failed" at the end |
-| The board changes during a sweep (a decision, a Stop) | The sweep continues on the songs it started with; settling reruns |
+| A decision during a sweep | Confirm, Reject, Undo, Confirm all and Pair with… wait until the sweep ends or is stopped. Finds move rows as they land, and a click must never land on a row that just moved |
 
 ---
 

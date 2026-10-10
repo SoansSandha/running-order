@@ -131,10 +131,27 @@ describe('settleFound', () => {
       spotifyTracks: [song, again],
       youtubeTracks: [],
       book: [],
-      foundForSpotify: new Map([['s1', { candidates: [found(song, y1, 'strong')] }]]),
+      foundForSpotify: new Map([['s1', { candidates: [found(song, y1, 'strong'), found(song, y2, 'strong', 1000)] }]]),
     })
     expect(result.pairs).toHaveLength(1)
     expect(result.unmatchedSpotify).toHaveLength(1)
+  })
+
+  test('the same YouTube video listed twice claims one Spotify find once', () => {
+    const video = yt('v1', 'Sheesha | Karan Aujla | New Punjabi Song 2022', 176000, 'MUSIC_VIDEO_TYPE_OMV')
+    const videoAgain = yt('v1', 'Sheesha | Karan Aujla | New Punjabi Song 2022', 176000, 'MUSIC_VIDEO_TYPE_OMV')
+    const twin1 = sp('t1', 'Sheesha', 161000)
+    const twin2 = sp('t2', 'Sheesha', 161000)
+    const result = settleFound(nothingPaired([], [video, videoAgain]), {
+      spotifyTracks: [],
+      youtubeTracks: [video, videoAgain],
+      book: [],
+      foundForYoutube: new Map([
+        ['v1', { candidates: [found(twin1, video, 'strong'), found(twin2, video, 'strong', 1000)] }],
+      ]),
+    })
+    expect(result.pairs).toHaveLength(1)
+    expect(result.unmatchedYoutube).toHaveLength(1)
   })
 
   test('two songs wanting one found track: the surer claim takes it', () => {
@@ -151,6 +168,31 @@ describe('settleFound', () => {
     })
     expect(summary(result)).toEqual([['s1', 'y1', 'strong', 'youtube']])
     expect(result.unmatchedSpotify.map((track) => track.id)).toEqual(['s2'])
+  })
+
+  test('a pair confirmed before snapshots existed is certain when search finds it', () => {
+    const book = recordDecision([], { spotifyKey: 's1', youtubeVideoId: 'y2', verdict: 'same' }, 1)
+    const result = settleFound(nothingPaired([song], []), {
+      spotifyTracks: [song],
+      youtubeTracks: [],
+      book,
+      foundForSpotify: new Map([['s1', { candidates: [found(song, y1, 'strong'), found(song, y2, 'likely', 3000)] }]]),
+    })
+    expect(summary(result)).toEqual([['s1', 'y2', 'certain', 'youtube']])
+  })
+
+  test('the mirror: a pair confirmed before snapshots existed is certain when search finds it on Spotify', () => {
+    const video = yt('v1', 'Sheesha | Karan Aujla | New Punjabi Song 2022', 176000, 'MUSIC_VIDEO_TYPE_OMV')
+    const t1 = sp('t1', 'Sheesha', 161000)
+    const t2 = sp('t2', 'Sheesha', 161000)
+    const book = recordDecision([], { spotifyKey: 't2', youtubeVideoId: 'v1', verdict: 'same' }, 1)
+    const result = settleFound(nothingPaired([], [video]), {
+      spotifyTracks: [],
+      youtubeTracks: [video],
+      book,
+      foundForYoutube: new Map([['v1', { candidates: [found(t1, video, 'strong'), found(t2, video, 'likely', 3000)] }]]),
+    })
+    expect(summary(result)).toEqual([['t2', 'v1', 'certain', 'spotify']])
   })
 
   test('pairs from the two playlists pass through untouched', () => {

@@ -12,17 +12,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { findOnSpotify, findOnYouTube } from '../match/findTwin.js'
 import {
+  findSnapshotFor,
   forgetDecision,
   loadMatchBook,
   recordDecision,
   saveMatchBook,
-  snapshotOf,
   spotifyKeyOf,
   verdictLookup,
 } from '../match/matchBook.js'
 import { scoreCandidates, settlePairs } from '../match/pairTracks.js'
 import { settleFound } from '../match/settleFound.js'
-import { AuthError } from '../services/spotify/client.js'
+import { AuthError, RateLimitError } from '../services/spotify/client.js'
 import { searchTracks } from '../services/spotify/search.js'
 import { ProxyUnavailableError, YouTubeSessionExpiredError } from '../services/youtube/client.js'
 import { toAppPlaylists } from '../services/youtube/playlists.js'
@@ -166,10 +166,13 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
       const key = spotifyKeyOf(track)
       if (key != null && !found.forSpotify.has(key) && !spotifySongs.has(key)) spotifySongs.set(key, track)
     }
-    const youtubeSongs = result.unmatchedYoutube.filter(
-      (track) => searchable(track) && track.id != null && !found.forYoutube.has(track.id),
-    )
-    return { spotify: [...spotifySongs.values()], youtube: youtubeSongs }
+    const youtubeSongs = new Map()
+    for (const track of result.unmatchedYoutube.filter(searchable)) {
+      if (track.id != null && !found.forYoutube.has(track.id) && !youtubeSongs.has(track.id)) {
+        youtubeSongs.set(track.id, track)
+      }
+    }
+    return { spotify: [...spotifySongs.values()], youtube: [...youtubeSongs.values()] }
   }, [result, found])
 
   const searchAll = useCallback(async () => {
@@ -208,7 +211,7 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
         },
         onFailed: () => advance(1),
         onStopped: stopHalf('Spotify'),
-        isFatal: (failure) => failure instanceof AuthError,
+        isFatal: (failure) => failure instanceof AuthError || failure instanceof RateLimitError,
       }),
     ])
     if (live()) setSweep((prev) => prev && { ...prev, running: false })
@@ -230,11 +233,7 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
   // D29: a pair with a track in neither playlist is a find, and a confirmed
   // find keeps a snapshot of that track.
   const findOf = useCallback(
-    (spotifyTrack, youtubeTrack) => {
-      if (!youtubeIds.has(youtubeTrack.id)) return snapshotOf(youtubeTrack, 'youtube')
-      if (!spotifyKeys.has(spotifyKeyOf(spotifyTrack))) return snapshotOf(spotifyTrack, 'spotify')
-      return undefined
-    },
+    (spotifyTrack, youtubeTrack) => findSnapshotFor(spotifyTrack, youtubeTrack, { youtubeIds, spotifyKeys }),
     [youtubeIds, spotifyKeys],
   )
 

@@ -24,6 +24,9 @@ export function ReviewScreen({ app }) {
   const likely = tier('likely')
   const strong = tier('strong')
   const settled = tier('certain')
+  // M-1: a row can move mid-decision while a sweep lands results, so deciding
+  // waits until it ends or is stopped.
+  const deciding = sweep?.running === true
 
   return (
     <Frame fill>
@@ -105,16 +108,19 @@ export function ReviewScreen({ app }) {
             {sweep.failed > 0 ? (
               <>
                 {' · '}
-                <span className="num">{formatCount(sweep.failed)}</span> searches failed
+                <span className="num">{formatCount(sweep.failed)}</span> search{sweep.failed === 1 ? '' : 'es'} failed
               </>
             ) : null}
           </p>
           <Meter done={sweep.done} total={sweep.total} />
           {sweep.running ? (
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
               <QuietLever className="lever-quiet is-compact" onClick={review.stopSearch}>
                 Stop
               </QuietLever>
+              <span className="row-sub">
+                Deciding waits until the search ends or is stopped, so no row moves under the pointer.
+              </span>
             </div>
           ) : null}
         </div>
@@ -142,14 +148,14 @@ export function ReviewScreen({ app }) {
             <GroupHeading count={likely.length}>Likely — check each one</GroupHeading>
             {likely.map((pair) => (
               <PairRow key={`l${rowKey(pair)}`} pair={pair} state="pending">
-                <DecisionLevers pair={pair} review={review} />
+                <DecisionLevers pair={pair} review={review} disabled={deciding} />
               </PairRow>
             ))}
 
             <GroupHeading count={strong.length}>Strong</GroupHeading>
             {strong.map((pair) => (
               <PairRow key={`s${rowKey(pair)}`} pair={pair}>
-                <DecisionLevers pair={pair} review={review} />
+                <DecisionLevers pair={pair} review={review} disabled={deciding} />
               </PairRow>
             ))}
 
@@ -162,6 +168,7 @@ export function ReviewScreen({ app }) {
                 searchOptions={searchOptionsOf(review.found.forSpotify.get(spotifyKeyOf(track)), 'youtube')}
                 playlistOptions={closestTitles(track, result.unmatchedYoutube)}
                 onPair={(chosen) => review.decide(track, chosen, 'same')}
+                disabled={deciding}
               />
             ))}
 
@@ -174,6 +181,7 @@ export function ReviewScreen({ app }) {
                 searchOptions={searchOptionsOf(review.found.forYoutube.get(track.id), 'spotify')}
                 playlistOptions={closestTitles(track, result.unmatchedSpotify)}
                 onPair={(chosen) => review.decide(chosen, track, 'same')}
+                disabled={deciding}
               />
             ))}
 
@@ -183,7 +191,7 @@ export function ReviewScreen({ app }) {
               </summary>
               {settled.map((pair) => (
                 <PairRow key={`c${rowKey(pair)}`} pair={pair} state="settled">
-                  <QuietLever className="lever-quiet is-compact" onClick={() => review.undo(pair)}>
+                  <QuietLever className="lever-quiet is-compact" onClick={() => review.undo(pair)} disabled={deciding}>
                     Undo
                   </QuietLever>
                 </PairRow>
@@ -203,7 +211,7 @@ export function ReviewScreen({ app }) {
           Search all unmatched
         </QuietLever>
         <span className="spacer" />
-        <Lever disabled={strong.length === 0} onClick={() => review.confirmAll(strong)}>
+        <Lever disabled={strong.length === 0 || deciding} onClick={() => review.confirmAll(strong)}>
           Confirm all <span className="num">{formatCount(strong.length)}</span> strong
         </Lever>
       </LeverRow>
@@ -232,15 +240,20 @@ function GroupHeading({ count, children }) {
   )
 }
 
-function DecisionLevers({ pair, review }) {
+function DecisionLevers({ pair, review, disabled }) {
   return (
     <>
-      <QuietLever className="lever-quiet is-compact" onClick={() => review.decide(pair.spotify, pair.youtube, 'same')}>
+      <QuietLever
+        className="lever-quiet is-compact"
+        onClick={() => review.decide(pair.spotify, pair.youtube, 'same')}
+        disabled={disabled}
+      >
         Confirm
       </QuietLever>
       <QuietLever
         className="lever-quiet is-compact"
         onClick={() => review.decide(pair.spotify, pair.youtube, 'different')}
+        disabled={disabled}
       >
         Reject
       </QuietLever>
@@ -284,7 +297,7 @@ function PairRow({ pair, state, children }) {
  * first, then the other playlist's leftovers, closest title first. The picker
  * sits in the other service's column.
  */
-function PickerRow({ track, side, searchOptions, playlistOptions, onPair }) {
+function PickerRow({ track, side, searchOptions, playlistOptions, onPair, disabled }) {
   const options = [...searchOptions, ...playlistOptions]
   const other = side === 'spotify' ? 'YouTube' : 'Spotify'
   const own = <TrackCell track={track} href={side === 'spotify' ? spotifyHref(track) : youtubeHref(track)} />
@@ -294,6 +307,7 @@ function PickerRow({ track, side, searchOptions, playlistOptions, onPair }) {
         className="field field-compact"
         value=""
         aria-label={`Pair ${titleOf(track)} with a ${other} track`}
+        disabled={disabled}
         onChange={(event) => {
           const chosen = options[Number(event.target.value)]
           if (chosen) onPair(chosen)

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import {
+  findSnapshotFor,
   forgetDecision,
   loadMatchBook,
   recordDecision,
@@ -209,5 +210,31 @@ describe('a confirmed find', () => {
       name: 'Sheesha',
       source: 'spotify',
     })
+  })
+
+  test('a pair whose YouTube track is not in the YouTube playlist keeps a YouTube snapshot', () => {
+    const snapshot = findSnapshotFor({ id: '54GK1bZMOAMXKysrnH4vTp', uri: 's' }, ajaVideo, {
+      youtubeIds: new Set(),
+      spotifyKeys: new Set(['54GK1bZMOAMXKysrnH4vTp']),
+    })
+    expect(snapshot).toMatchObject({ side: 'youtube', name: 'AJA - Kaléra (Feat. Jaski)' })
+  })
+
+  test('a pair whose Spotify track is not in the Spotify playlist, and whose YouTube track is, keeps a Spotify snapshot', () => {
+    const sheesha = { id: '1MGHB7pXahNVdHxKPbMvdx', uri: 'spotify:track:1MGHB7pXahNVdHxKPbMvdx', name: 'Sheesha' }
+    const snapshot = findSnapshotFor(sheesha, ajaVideo, {
+      youtubeIds: new Set([ajaVideo.id]),
+      spotifyKeys: new Set(),
+    })
+    expect(snapshot).toMatchObject({ side: 'spotify', name: 'Sheesha', uri: 'spotify:track:1MGHB7pXahNVdHxKPbMvdx' })
+  })
+
+  test('a pair with both tracks in their playlists is not a find', () => {
+    const spotifyTrack = { id: '54GK1bZMOAMXKysrnH4vTp', uri: 's' }
+    const snapshot = findSnapshotFor(spotifyTrack, ajaVideo, {
+      youtubeIds: new Set([ajaVideo.id]),
+      spotifyKeys: new Set([spotifyTrack.id]),
+    })
+    expect(snapshot).toBeUndefined()
   })
 })

@@ -40,9 +40,12 @@ export function settleFound(
       claims.push(certain(song, trackFromSnapshot(entry), 'youtube'))
     }
     for (const candidate of foundForSpotify.get(key)?.candidates ?? []) {
-      // 'same' is already a certain claim above; 'different' is rejected for good.
-      if (verdictFor(key, candidate.youtube.id) !== null) continue
-      claims.push({ ...candidate, spotify: song, missingFrom: 'youtube' })
+      // 'same' is certain even with no snapshot — it is still the user's
+      // word; a snapshot claim may also exist above, but claimedFinds keeps
+      // that from pairing twice. 'different' is rejected for good.
+      const verdict = verdictFor(key, candidate.youtube.id)
+      if (verdict === 'different') continue
+      claims.push(verdict === 'same' ? certain(song, candidate.youtube, 'youtube') : { ...candidate, spotify: song, missingFrom: 'youtube' })
     }
   }
   for (const song of settled.unmatchedYoutube) {
@@ -51,8 +54,9 @@ export function settleFound(
       claims.push(certain(trackFromSnapshot(entry), song, 'spotify'))
     }
     for (const candidate of foundForYoutube.get(song.id)?.candidates ?? []) {
-      if (verdictFor(spotifyKeyOf(candidate.spotify), song.id) !== null) continue
-      claims.push({ ...candidate, youtube: song, missingFrom: 'spotify' })
+      const verdict = verdictFor(spotifyKeyOf(candidate.spotify), song.id)
+      if (verdict === 'different') continue
+      claims.push(verdict === 'same' ? certain(candidate.spotify, song, 'spotify') : { ...candidate, youtube: song, missingFrom: 'spotify' })
     }
   }
 
@@ -65,14 +69,20 @@ export function settleFound(
   const found = []
   const claimedSongs = new Set()
   const claimedFinds = new Set()
+  const claimedSongKeys = new Set()
   for (const claim of claims) {
     const song = claim.missingFrom === 'youtube' ? claim.spotify : claim.youtube
     // Two searches can return the same track as different objects, so a find
     // is claimed by id, not identity.
     const find = claim.missingFrom === 'youtube' ? `y:${claim.youtube.id}` : `s:${spotifyKeyOf(claim.spotify)}`
+    // A song listed twice takes one find; its other copy stays unmatched. A
+    // certain claim is never skipped by this, but it still adds its key.
+    const songKey = claim.missingFrom === 'youtube' ? `s:${spotifyKeyOf(claim.spotify)}` : `y:${claim.youtube.id}`
     if (claimedSongs.has(song) || claimedFinds.has(find)) continue
+    if (claim.tier !== 'certain' && claimedSongKeys.has(songKey)) continue
     claimedSongs.add(song)
     claimedFinds.add(find)
+    claimedSongKeys.add(songKey)
     found.push(claim)
   }
 

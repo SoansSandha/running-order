@@ -37,3 +37,6 @@ proxy/browser.json
 proxy/.venv/
 proxy/__pycache__/
 proxy/.pytest_cache/
+
+# The owner's own library data — never commit it.
+.local/

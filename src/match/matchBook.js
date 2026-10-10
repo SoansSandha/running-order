@@ -71,6 +71,17 @@ export function snapshotOf(track, side) {
   }
 }
 
+/**
+ * The snapshot a confirmed pair keeps (D29): of its YouTube track when that
+ * track is not in the YouTube playlist, else of its Spotify track when that is
+ * not in the Spotify playlist; none for a pair from the two playlists.
+ */
+export function findSnapshotFor(spotifyTrack, youtubeTrack, { youtubeIds, spotifyKeys }) {
+  if (!youtubeIds.has(youtubeTrack?.id)) return snapshotOf(youtubeTrack, 'youtube')
+  if (!spotifyKeys.has(spotifyKeyOf(spotifyTrack))) return snapshotOf(spotifyTrack, 'spotify')
+  return undefined
+}
+
 /** The found track a decision's snapshot describes, in the app's Track shape. */
 export function trackFromSnapshot(decision) {
   const { found } = decision
