@@ -4,9 +4,12 @@
  * Read-only. Decisions go to the match book; nothing is written to Spotify or
  * YouTube. Likely rows warm amber (pending) and settled rows take the green
  * seat (committed), reusing the board's data-moves and data-written states.
- * See docs/2026-10-05-match-review-design.md §3.
+ * "Search all unmatched" looks for the leftovers' twins in the other
+ * service's catalogue. See docs/2026-10-05-match-review-design.md §3 and
+ * docs/2026-10-08-catalogue-search-design.md §6.
  */
 
+import { spotifyKeyOf } from '../../match/matchBook.js'
 import { closestTitles } from '../../match/pairTracks.js'
 import { artistsOf, formatCount, formatDelta, titleOf } from '../format.js'
 import { useMatchReview } from '../useMatchReview.js'
@@ -14,9 +17,9 @@ import { Frame, Head, Lever, LeverRow, Meter, Notice, QuietLever } from '../comp
 import { UnlitField } from '../components/UnlitField.jsx'
 
 export function ReviewScreen({ app }) {
-  const { playlist, tracks, youtube, setScreen } = app
-  const review = useMatchReview({ youtube, spotifyTracks: tracks })
-  const { result } = review
+  const { playlist, tracks, youtube, client, setScreen } = app
+  const review = useMatchReview({ youtube, spotify: client, spotifyTracks: tracks })
+  const { result, sweep } = review
   const tier = (name) => result?.pairs.filter((pair) => pair.tier === name) ?? []
   const likely = tier('likely')
   const strong = tier('strong')
@@ -94,6 +97,37 @@ export function ReviewScreen({ app }) {
         </div>
       )}
 
+      {sweep ? (
+        <div className="section">
+          <p className="col-label" style={{ marginBottom: 8 }}>
+            {sweep.running ? 'Searching' : 'Searched'} <span className="num">{formatCount(sweep.done)}</span> of{' '}
+            <span className="num">{formatCount(sweep.total)}</span>
+            {sweep.failed > 0 ? (
+              <>
+                {' · '}
+                <span className="num">{formatCount(sweep.failed)}</span> searches failed
+              </>
+            ) : null}
+          </p>
+          <Meter done={sweep.done} total={sweep.total} />
+          {sweep.running ? (
+            <div style={{ marginTop: 10 }}>
+              <QuietLever className="lever-quiet is-compact" onClick={review.stopSearch}>
+                Stop
+              </QuietLever>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {sweep?.errors.map((failure) => (
+        <div className="section" key={failure.label}>
+          <Notice tone="red" title={`Could not search ${failure.label}`}>
+            {failure.message}
+          </Notice>
+        </div>
+      ))}
+
       {result ? (
         <div className="board board-review">
           <div className="board-cols" role="row">
@@ -107,37 +141,40 @@ export function ReviewScreen({ app }) {
           <div className="board-scroll" role="table" aria-label="Matches">
             <GroupHeading count={likely.length}>Likely — check each one</GroupHeading>
             {likely.map((pair) => (
-              <PairRow key={`l${pair.spotify.originalIndex}`} pair={pair} state="pending">
+              <PairRow key={`l${rowKey(pair)}`} pair={pair} state="pending">
                 <DecisionLevers pair={pair} review={review} />
               </PairRow>
             ))}
 
             <GroupHeading count={strong.length}>Strong</GroupHeading>
             {strong.map((pair) => (
-              <PairRow key={`s${pair.spotify.originalIndex}`} pair={pair}>
+              <PairRow key={`s${rowKey(pair)}`} pair={pair}>
                 <DecisionLevers pair={pair} review={review} />
               </PairRow>
             ))}
 
             <GroupHeading count={result.unmatchedSpotify.length}>Only on Spotify</GroupHeading>
             {result.unmatchedSpotify.map((track) => (
-              <OnlySpotifyRow
+              <PickerRow
                 key={`o${track.originalIndex}`}
                 track={track}
-                options={closestTitles(track, result.unmatchedYoutube)}
+                side="spotify"
+                searchOptions={searchOptionsOf(review.found.forSpotify.get(spotifyKeyOf(track)), 'youtube')}
+                playlistOptions={closestTitles(track, result.unmatchedYoutube)}
                 onPair={(chosen) => review.decide(track, chosen, 'same')}
               />
             ))}
 
             <GroupHeading count={result.unmatchedYoutube.length}>Only on YouTube</GroupHeading>
             {result.unmatchedYoutube.map((track) => (
-              <div className="board-row" role="row" key={`y${track.originalIndex}`}>
-                <span role="cell" />
-                <TrackCell track={track} href={youtubeHref(track)} />
-                <span role="cell" />
-                <span role="cell" className="col-why" />
-                <span role="cell" />
-              </div>
+              <PickerRow
+                key={`y${track.originalIndex}`}
+                track={track}
+                side="youtube"
+                searchOptions={searchOptionsOf(review.found.forYoutube.get(track.id), 'spotify')}
+                playlistOptions={closestTitles(track, result.unmatchedSpotify)}
+                onPair={(chosen) => review.decide(chosen, track, 'same')}
+              />
             ))}
 
             <details className="review-settled">
@@ -145,7 +182,7 @@ export function ReviewScreen({ app }) {
                 Settled (<span className="num">{formatCount(settled.length)}</span>)
               </summary>
               {settled.map((pair) => (
-                <PairRow key={`c${pair.spotify.originalIndex}`} pair={pair} state="settled">
+                <PairRow key={`c${rowKey(pair)}`} pair={pair} state="settled">
                   <QuietLever className="lever-quiet is-compact" onClick={() => review.undo(pair)}>
                     Undo
                   </QuietLever>
@@ -159,6 +196,12 @@ export function ReviewScreen({ app }) {
       ) : null}
 
       <LeverRow>
+        <QuietLever
+          onClick={review.searchAll}
+          disabled={!result || sweep?.running === true || review.unsearchedCount === 0}
+        >
+          Search all unmatched
+        </QuietLever>
         <span className="spacer" />
         <Lever disabled={strong.length === 0} onClick={() => review.confirmAll(strong)}>
           Confirm all <span className="num">{formatCount(strong.length)}</span> strong
@@ -166,6 +209,19 @@ export function ReviewScreen({ app }) {
       </LeverRow>
     </Frame>
   )
+}
+
+/**
+ * A row is keyed by its playlist-side track: a found track's position in a
+ * search result is not unique.
+ */
+const rowKey = (pair) =>
+  pair.missingFrom === 'spotify' ? `y${pair.youtube.originalIndex}` : `p${pair.spotify.originalIndex}`
+
+/** Everything a search turned up for one song, accepted first, for Pair with…. */
+function searchOptionsOf(entry, side) {
+  if (!entry) return []
+  return [...entry.candidates.map((pair) => pair[side]), ...entry.nearMisses]
 }
 
 function GroupHeading({ count, children }) {
@@ -200,8 +256,16 @@ function PairRow({ pair, state, children }) {
       data-moves={state === 'pending' ? 'true' : undefined}
       data-written={state === 'settled' ? 'true' : undefined}
     >
-      <TrackCell track={pair.spotify} href={spotifyHref(pair.spotify)} />
-      <TrackCell track={pair.youtube} href={youtubeHref(pair.youtube)} />
+      <TrackCell
+        track={pair.spotify}
+        href={spotifyHref(pair.spotify)}
+        note={pair.missingFrom === 'spotify' ? 'Not in your Spotify playlist' : null}
+      />
+      <TrackCell
+        track={pair.youtube}
+        href={youtubeHref(pair.youtube)}
+        note={pair.missingFrom === 'youtube' ? 'Not in your YouTube playlist' : null}
+      />
       <span className="cell-end" role="cell">
         <span className="row-meta num">{formatDelta(pair.durationDeltaMs)}</span>
       </span>
@@ -215,28 +279,52 @@ function PairRow({ pair, state, children }) {
   )
 }
 
-function OnlySpotifyRow({ track, options, onPair }) {
+/**
+ * An unmatched song and its Pair with… picker: what search turned up for it
+ * first, then the other playlist's leftovers, closest title first. The picker
+ * sits in the other service's column.
+ */
+function PickerRow({ track, side, searchOptions, playlistOptions, onPair }) {
+  const options = [...searchOptions, ...playlistOptions]
+  const other = side === 'spotify' ? 'YouTube' : 'Spotify'
+  const own = <TrackCell track={track} href={side === 'spotify' ? spotifyHref(track) : youtubeHref(track)} />
+  const picker = (
+    <span role="cell">
+      <select
+        className="field field-compact"
+        value=""
+        aria-label={`Pair ${titleOf(track)} with a ${other} track`}
+        onChange={(event) => {
+          const chosen = options[Number(event.target.value)]
+          if (chosen) onPair(chosen)
+        }}
+      >
+        <option value="">Pair with…</option>
+        {searchOptions.length > 0 ? (
+          <optgroup label="Search results">
+            {searchOptions.map((option, index) => (
+              <option key={`f${option.id}`} value={index}>
+                {titleOf(option)} — {artistsOf(option)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        {playlistOptions.length > 0 ? (
+          <optgroup label={`In your ${other} playlist`}>
+            {playlistOptions.map((option, index) => (
+              <option key={`p${option.originalIndex}`} value={searchOptions.length + index}>
+                {titleOf(option)} — {artistsOf(option)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+      </select>
+    </span>
+  )
   return (
     <div className="board-row" role="row">
-      <TrackCell track={track} href={spotifyHref(track)} />
-      <span role="cell">
-        <select
-          className="field field-compact"
-          value=""
-          aria-label={`Pair ${titleOf(track)} with a YouTube track`}
-          onChange={(event) => {
-            const chosen = options[Number(event.target.value)]
-            if (chosen) onPair(chosen)
-          }}
-        >
-          <option value="">Pair with…</option>
-          {options.map((option, index) => (
-            <option key={`${option.originalIndex}`} value={index}>
-              {titleOf(option)} — {artistsOf(option)}
-            </option>
-          ))}
-        </select>
-      </span>
+      {side === 'spotify' ? own : picker}
+      {side === 'spotify' ? picker : own}
       <span role="cell" />
       <span role="cell" className="col-why" />
       <span role="cell" />
@@ -244,7 +332,7 @@ function OnlySpotifyRow({ track, options, onPair }) {
   )
 }
 
-function TrackCell({ track, href }) {
+function TrackCell({ track, href, note = null }) {
   return (
     <span className="cell-stack" role="cell">
       <span className="row-title">{titleOf(track)}</span>
@@ -259,6 +347,7 @@ function TrackCell({ track, href }) {
           </>
         ) : null}
       </span>
+      {note ? <span className="row-sub">{note}</span> : null}
     </span>
   )
 }

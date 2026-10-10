@@ -1103,6 +1103,8 @@
    (the Single Grid Declaration Rule). */
 .board-review {
   --cols: minmax(0, 1fr) minmax(0, 1fr) 9ch minmax(0, 0.8fr) 24ch;
+  /* Tall enough for a found track's third line, "Not in your … playlist". */
+  --row-h: 58px;
 }
 
 .review-group {
