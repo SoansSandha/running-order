@@ -16,7 +16,8 @@ import { diceCoefficient } from '../csv/match.js'
 import { spotifyKeyOf } from './matchBook.js'
 import { foldTitle, scorePair, videoTypeRank } from './scorePair.js'
 
-const TIER_RANK = { certain: 3, strong: 2, likely: 1 }
+/** How sure each tier is; settling claims the surest pair first. */
+export const TIER_RANK = { certain: 3, strong: 2, likely: 1 }
 
 /**
  * Every pair scorePair proposes, before any decision is applied. The slow

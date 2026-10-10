@@ -384,6 +384,16 @@ function essentialTitle(title, credited) {
 }
 
 /**
+ * What to search another catalogue for, given a YouTube track: its title read
+ * past decoration and a leading artist credit, as scorePair itself reads it —
+ * `Sheesha | Karan Aujla | … | New Punjabi Song 2022` searches as `sheesha`.
+ * The whole folded title when nothing is left. Catalogue search design §4.
+ */
+export function queryTitle(track) {
+  return essentialTitle(track?.name, new Set(bylineNames(track))) || foldTitle(track?.name)
+}
+
+/**
  * A title's lead and tail segments, read past a leading artist credit; null
  * when there is no lead that could be a title.
  */

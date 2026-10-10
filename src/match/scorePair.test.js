@@ -9,6 +9,7 @@ import {
   STRONG_DRIFT_MS,
   VARIANT_TAIL,
   VIDEO_MAX_DRIFT_MS,
+  queryTitle,
   scorePair,
 } from './scorePair.js'
 
@@ -789,3 +790,16 @@ function credits(...names) {
   const artists = names.map((name) => ({ id: null, name }))
   return { artists, primaryArtist: artists[0] }
 }
+
+describe('queryTitle', () => {
+  // Titles verbatim from the live YouTube library and searches.
+  test.each([
+    ['Sheesha | Karan Aujla | J Statik | Sagar Deol | New Punjabi Song 2022', ['Karan Aujla'], 'sheesha'],
+    ['Karan Aujla - Sheesha (Official Video)', ['Karan Aujla'], 'sheesha'],
+    ['No Need (Full Video) Karan Aujla | Deep Jandu | Rupan Bal | Latest Punjabi song 2019', ['Rehaan Records'], 'no need'],
+    ['AJA - Kaléra (Feat. Jaski)', ['Kaléra'], 'aja'],
+    ['Hawawan', ['Chani Nattan', 'Gurinder Gill'], 'hawawan'],
+  ])('%s searches as %s', (name, artists, expected) => {
+    expect(queryTitle(video({ name, ...credits(...artists) }))).toBe(expected)
+  })
+})
