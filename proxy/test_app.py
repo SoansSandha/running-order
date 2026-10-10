@@ -125,6 +125,9 @@ class RaisingYT:
     def get_library_playlists(self, limit=None):
         raise RuntimeError(self._message)
 
+    def search(self, query, filter=None, limit=20):
+        raise RuntimeError(self._message)
+
 
 def test_post_auth_status_true_when_the_probe_succeeds(client, monkeypatch):
     fake = FakeYT(playlist={"id": "LM", "tracks": []})
@@ -204,4 +207,39 @@ def test_an_expired_session_drops_the_cached_client(client, monkeypatch):
 def test_a_failing_route_drops_the_cached_client(client, monkeypatch, path):
     monkeypatch.setattr(proxy, "_client", RaisingYT())
     assert client.get(path).status_code == 502
+    assert proxy._client is None
+
+
+class SearchYT:
+    def __init__(self, results):
+        self._results = results
+        self.calls = []
+
+    def search(self, query, filter=None, limit=20):
+        self.calls.append({"query": query, "filter": filter, "limit": limit})
+        return self._results
+
+
+def test_search_passes_results_through_cut_to_the_limit(client, monkeypatch):
+    # ytmusicapi returns at least `limit` results, often more.
+    results = [{"videoId": f"v{i}", "title": f"t{i}", "videoType": "MUSIC_VIDEO_TYPE_ATV"} for i in range(20)]
+    fake = SearchYT(results)
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    body = client.get("/search", params={"q": "INT102400308", "filter": "songs", "limit": 3}).json()
+    assert body == {"results": results[:3]}
+    assert fake.calls == [{"query": "INT102400308", "filter": "songs", "limit": 3}]
+
+
+def test_search_refuses_an_unknown_filter(client, monkeypatch):
+    fake = SearchYT([])
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert client.get("/search", params={"q": "x", "filter": "podcasts"}).status_code == 400
+    assert fake.calls == []
+
+
+def test_search_failure_is_clean_and_drops_the_cached_client(client, monkeypatch):
+    monkeypatch.setattr(proxy, "_client", RaisingYT())
+    response = client.get("/search", params={"q": "x"})
+    assert response.status_code == 502
+    assert "leaky detail" not in response.text
     assert proxy._client is None

@@ -42,6 +42,19 @@ describe('createYouTubeClient', () => {
     expect(fetchImpl.mock.calls[0][0]).toBe('http://127.0.0.1:8787/playlists/PL%2Fweird%20id')
   })
 
+  test('searches with the query, filter and limit encoded', async () => {
+    const fetchImpl = vi.fn(async () => ok({ results: [{ videoId: 'v1' }] }))
+    const results = await clientWith(fetchImpl).search('Don’t Worry Karan Aujla', 'songs', 5)
+    expect(results).toEqual([{ videoId: 'v1' }])
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://127.0.0.1:8787/search?q=Don%E2%80%99t+Worry+Karan+Aujla&filter=songs&limit=5',
+    )
+  })
+
+  test('a search with no results key is no results', async () => {
+    expect(await clientWith(vi.fn(async () => ok({}))).search('x', 'videos', 3)).toEqual([])
+  })
+
   test('throws ProxyUnavailableError when the proxy cannot be reached', async () => {
     const client = clientWith(vi.fn(async () => { throw new TypeError('fetch failed') }))
     await expect(client.listPlaylists()).rejects.toBeInstanceOf(ProxyUnavailableError)

@@ -76,5 +76,15 @@ export function createYouTubeClient({ baseUrl = DEFAULT_BASE_URL, fetch: fetchIm
     fetchPlaylist(playlistId) {
       return request(`/playlists/${encodeURIComponent(playlistId)}`)
     },
+
+    /**
+     * Catalogue search, results passed through as ytmusicapi returns them.
+     * @param {'songs'|'videos'} filter
+     */
+    async search(query, filter, limit) {
+      const params = new URLSearchParams({ q: query, filter, limit: String(limit) })
+      const body = await request(`/search?${params}`)
+      return body?.results ?? []
+    },
   }
 }

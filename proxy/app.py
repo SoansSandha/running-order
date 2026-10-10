@@ -12,7 +12,7 @@ where the test suite lives. See docs/2026-09-18-youtube-mirror-design.md D13.
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from ytmusicapi import YTMusic
 
@@ -148,3 +148,25 @@ def get_playlist(playlist_id: str) -> dict:
         "readable": len(tracks),
         "tracks": tracks,
     }
+
+
+SEARCH_FILTERS = ("songs", "videos")
+
+
+@app.get("/search")
+def search(q: str, filter: str = "songs", limit: int = Query(5, ge=1, le=20)) -> dict:
+    """Catalogue search results, passed through exactly as ytmusicapi returns them.
+
+    As thin as the playlist routes (D13): which query to send, and what a
+    result is worth, are decided in JS (src/match/findTwin.js). ytmusicapi
+    returns at least `limit` results and often more, so they are cut here.
+    """
+    if filter not in SEARCH_FILTERS:
+        raise HTTPException(status_code=400, detail="Unknown search filter.")
+    try:
+        results = get_client().search(q, filter=filter, limit=limit)
+    except Exception:
+        reset_client()
+        # Never interpolate the exception's own string (see get_playlist).
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
+    return {"results": results[:limit]}

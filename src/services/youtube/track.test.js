@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { normalizeYouTubeTracks } from './track.js'
+import { normalizeYouTubeSearchResults, normalizeYouTubeTracks } from './track.js'
 import { ALBUM_TRACK, MUSIC_VIDEO, UNAVAILABLE, UNTYPED, USER_UPLOAD } from './fixtures.js'
 
 describe('normalizeYouTubeTracks', () => {
@@ -99,5 +99,39 @@ describe('normalizeYouTubeTracks', () => {
   test('videoType is null when YouTube does not say', () => {
     // Measured: 13 of 383 real rows carry no videoType.
     expect(normalizeYouTubeTracks([UNTYPED])[0].videoType).toBeNull()
+  })
+})
+
+describe('normalizeYouTubeSearchResults', () => {
+  // Title, credit, length and type verbatim from a live search for
+  // "AJA Kaléra" (filter videos) on 2026-10-08.
+  const AJA_VIDEO = {
+    title: 'AJA - Kaléra (Feat. Jaski)',
+    artists: [{ name: 'Kaléra', id: null }],
+    album: null,
+    duration_seconds: 136,
+    videoId: 'q7e348rz27I',
+    isExplicit: false,
+    videoType: 'MUSIC_VIDEO_TYPE_OMV',
+    resultType: 'video',
+  }
+
+  test('maps a search result onto the Track shape, with no playlist item id', () => {
+    const [track] = normalizeYouTubeSearchResults([AJA_VIDEO])
+    expect(track).toMatchObject({
+      id: 'q7e348rz27I',
+      itemId: null,
+      name: 'AJA - Kaléra (Feat. Jaski)',
+      durationMs: 136000,
+      videoType: 'MUSIC_VIDEO_TYPE_OMV',
+      source: 'youtube',
+      originalIndex: 0,
+    })
+    expect(track.primaryArtist).toEqual({ id: null, name: 'Kaléra' })
+  })
+
+  test('drops a result with no videoId, which can be neither played nor paired', () => {
+    const tracks = normalizeYouTubeSearchResults([{ ...AJA_VIDEO, videoId: null }, AJA_VIDEO])
+    expect(tracks.map((track) => [track.id, track.originalIndex])).toEqual([['q7e348rz27I', 0]])
   })
 })
