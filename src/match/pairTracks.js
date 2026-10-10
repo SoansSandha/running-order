@@ -19,6 +19,17 @@ import { foldTitle, scorePair, videoTypeRank } from './scorePair.js'
 /** How sure each tier is; settling claims the surest pair first. */
 export const TIER_RANK = { certain: 3, strong: 2, likely: 1 }
 
+/** The tally a settled result reports: pairs by tier, and what is left unmatched. */
+export function countsOf(pairs, unmatchedSpotify, unmatchedYoutube) {
+  return {
+    certain: pairs.filter((pair) => pair.tier === 'certain').length,
+    strong: pairs.filter((pair) => pair.tier === 'strong').length,
+    likely: pairs.filter((pair) => pair.tier === 'likely').length,
+    unmatchedSpotify: unmatchedSpotify.length,
+    unmatchedYoutube: unmatchedYoutube.length,
+  }
+}
+
 /**
  * Every pair scorePair proposes, before any decision is applied. The slow
  * half: 160,930 scorePair calls, about 0.35s, for the live playlists.
@@ -134,13 +145,7 @@ export function settlePairs(spotifyTracks, youtubeTracks, scored, { verdictFor }
     pairs,
     unmatchedSpotify,
     unmatchedYoutube,
-    counts: {
-      certain: pairs.filter((pair) => pair.tier === 'certain').length,
-      strong: pairs.filter((pair) => pair.tier === 'strong').length,
-      likely: pairs.filter((pair) => pair.tier === 'likely').length,
-      unmatchedSpotify: unmatchedSpotify.length,
-      unmatchedYoutube: unmatchedYoutube.length,
-    },
+    counts: countsOf(pairs, unmatchedSpotify, unmatchedYoutube),
   }
 }
 

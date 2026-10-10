@@ -9,7 +9,7 @@
  */
 
 import { spotifyKeyOf, trackFromSnapshot, verdictLookup } from './matchBook.js'
-import { TIER_RANK } from './pairTracks.js'
+import { TIER_RANK, countsOf } from './pairTracks.js'
 
 /**
  * @param {{pairs: Array, unmatchedSpotify: Array, unmatchedYoutube: Array}} settled what settlePairs returned
@@ -83,13 +83,7 @@ export function settleFound(
     pairs,
     unmatchedSpotify,
     unmatchedYoutube,
-    counts: {
-      certain: pairs.filter((pair) => pair.tier === 'certain').length,
-      strong: pairs.filter((pair) => pair.tier === 'strong').length,
-      likely: pairs.filter((pair) => pair.tier === 'likely').length,
-      unmatchedSpotify: unmatchedSpotify.length,
-      unmatchedYoutube: unmatchedYoutube.length,
-    },
+    counts: countsOf(pairs, unmatchedSpotify, unmatchedYoutube),
   }
 }
 
