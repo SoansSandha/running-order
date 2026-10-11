@@ -9,6 +9,7 @@ import {
   STRONG_DRIFT_MS,
   VARIANT_TAIL,
   VIDEO_MAX_DRIFT_MS,
+  explainPair,
   queryTitle,
   scorePair,
 } from './scorePair.js'
@@ -801,5 +802,30 @@ describe('queryTitle', () => {
     ['Hawawan', ['Chani Nattan', 'Gurinder Gill'], 'hawawan'],
   ])('%s searches as %s', (name, artists, expected) => {
     expect(queryTitle(video({ name, ...credits(...artists) }))).toBe(expected)
+  })
+})
+
+describe('explainPair', () => {
+  test('an accepted pair gives its tier and the matcher\'s own reason', () => {
+    expect(explainPair(track(), track())).toBe('strong: title and artist match exactly')
+    expect(explainPair(track(), track({ durationMs: 191000 }))).toBe('likely: the durations differ by 3s')
+  })
+
+  test('a refused pair lists every fact that differs', () => {
+    const other = video({ name: 'Something Else Entirely', ...credits('Nobody'), durationMs: 300000 })
+    expect(explainPair(track(), other)).toBe('no match: lengths differ by 112s, different title, no artist in common')
+  })
+
+  test('the same song too far apart in length says only that', () => {
+    expect(explainPair(track(), track({ durationMs: 228000 }))).toBe('no match: lengths differ by 40s')
+  })
+
+  test('decoration around the same title is not a different title', () => {
+    const decorated = video({ name: 'Karan Aujla - Antidote (Official Video)', durationMs: 248000 })
+    expect(explainPair(track(), decorated)).toBe('no match: lengths differ by 60s')
+  })
+
+  test('a side with no length says there is nothing to compare', () => {
+    expect(explainPair(track({ durationMs: 0 }), track())).toBe('no match: no length to compare')
   })
 })
