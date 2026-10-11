@@ -2,9 +2,11 @@
 // screen in demo mode at six widths and reports any element that runs past
 // its column or its row. It must report {}.
 //
-// With the dev server running (`npm run dev:web`), from the repo root:
-//   playwright-cli open about:blank
-//   playwright-cli --raw run-code --filename=scripts/check-columns.js
+// With the dev server running (`npm run dev:web`; if 127.0.0.1 does not answer,
+// `npx vite --host 127.0.0.1 --port 5173`), from the repo root:
+//   playwright-cli -s=columns open about:blank
+//   playwright-cli -s=columns --raw run-code --filename=scripts/check-columns.js
+//   playwright-cli -s=columns close
 //
 // It uses no one's library: the match review is fed synthetic long titles and
 // artists through a mocked proxy, and every request that would leave the
@@ -141,15 +143,25 @@ async (page) => {
       await page.waitForFunction(() => document.body.textContent.includes('Searched'), null, { timeout: 30000 })
       await page.locator('.review-settled > summary').click()
       note(`review@${width}`, await page.evaluate(measure))
-      for (const [label, button] of [
-        ['tray: only on Spotify', page.getByRole('button', { name: 'Find a match' }).first()],
-        ['tray: a likely pair', page.getByRole('button', { name: 'Listen', exact: true }).first()],
-        ['tray: only on YouTube', page.getByRole('button', { name: 'Find a match' }).last()],
+      for (const [label, button, pair, search] of [
+        ['tray: only on Spotify', page.getByRole('button', { name: 'Find a match' }).first(), false, 'Search YouTube Music'],
+        ['tray: a likely pair', page.getByRole('button', { name: 'Listen', exact: true }).first(), true, null],
+        ['tray: only on YouTube', page.getByRole('button', { name: 'Find a match' }).last(), false, 'Search Spotify'],
       ]) {
         await button.click()
-        await page.waitForSelector('.tray')
+        await page.waitForSelector('.tray .tray-cand')
+        // Prove the right tray opened and that it has candidates to measure.
+        const opened = await page.evaluate(() => ({
+          cands: document.querySelectorAll('.tray .tray-cand').length,
+          pair: document.querySelectorAll('.tray .tray-pair').length > 0,
+          buttons: [...document.querySelectorAll('.tray button')].map((b) => b.textContent.trim()),
+        }))
+        if (opened.cands === 0) throw new Error(`${label}@${width}: the tray has no candidates to measure`)
+        if (opened.pair !== pair) throw new Error(`${label}@${width}: expected ${pair ? 'a' : 'no'} pair in the tray`)
+        if (search && !opened.buttons.includes(search)) throw new Error(`${label}@${width}: expected a "${search}" button, found ${JSON.stringify(opened.buttons)}`)
         note(`${label}@${width}`, await page.evaluate(measure))
         await page.getByRole('button', { name: 'Close', exact: true }).first().click()
+        await page.waitForSelector('.tray', { state: 'detached' })
       }
     }
   }
