@@ -14,9 +14,9 @@ These rules override any skill, plan, or default that says otherwise.
 ### Starting work
 
 1. `git fetch origin`, then cut the branch from the latest `develop`:
-   `git switch -c <type>/<name> origin/develop` (use local `develop` if
-   `origin/develop` doesn't exist yet). Cut from `master` only when the
-   user explicitly says so.
+   `git switch -c <type>/<name> --no-track origin/develop` (use local
+   `develop` if `origin/develop` doesn't exist yet). Cut from `master`
+   only when the user explicitly says so.
 2. Already on a feature branch? If the new work belongs to it, stay. If
    it's unrelated, ask: new branch, or this one.
 3. Uncommitted or staged changes in the tree when a new branch is needed?
@@ -54,8 +54,9 @@ Examples: `feat/youtube-match-tray`, `fix/reorder-skips-last-track`,
   and never commit.
 - To review one task in isolation without commits, snapshot the index
   before and after it with `git write-tree`, then `git diff <before> <after>`.
-- Done with a feature? Run lint and tests, stage, and tell the user it's
-  ready to commit. Never merge locally (this replaces the
+- Done with a feature? Run lint and tests, plus the browser check if a
+  screen changed (see [Testing in the browser](#testing-in-the-browser)),
+  stage, and tell the user it's ready to commit. Never merge locally (this replaces the
   finishing-a-development-branch menu).
 
 ### On "commit and push"
@@ -136,3 +137,70 @@ that is still open, so a late paste can't land on a closed row.
   stop a direct push. This rule has to.
 - Force-push, `reset --hard`, or rewrite history that has been pushed.
 - Skip hooks (`--no-verify`).
+
+## Testing in the browser
+
+Unit tests can't see layout, focus, real clicks, or console errors.
+`playwright-cli` (installed globally; see its skill) drives the running
+app so Claude can check those directly.
+
+### When
+
+- After any change to what a screen shows or does, before calling it
+  done: walk the changed flow and confirm the console has no errors.
+- After a layout change, also run `scripts/check-columns.js` if the
+  branch has it (how-to in its header). It must report `{}`.
+- Put what was checked in the PR's Testing section.
+
+### The dev server
+
+- The app must be served at `127.0.0.1:5173` (strict port; Spotify's
+  redirect URI depends on it).
+- If something already answers there, use it and leave it running. It
+  may be the user's.
+- Otherwise start it in the background, and stop it when done:
+  `npm run dev:web` for demo mode, or `npm run dev` when the YouTube
+  proxy is needed.
+
+### Demo mode (the default)
+
+`http://127.0.0.1:5173/?demo=1` loads a made-up library with no sign-in.
+It works on the dev server only. Use it for every check that doesn't
+need a real account.
+
+```
+playwright-cli -s=check open "http://127.0.0.1:5173/?demo=1"
+playwright-cli -s=check snapshot        # element refs for click / fill
+playwright-cli -s=check click e31
+playwright-cli -s=check console error   # must show 0 errors
+playwright-cli -s=check screenshot      # for visual changes
+playwright-cli -s=check close
+```
+
+### Live checks (test accounts only)
+
+- Sign in only with the Spotify and YouTube Music test profiles. Every
+  live test uses the playlist "test punjabi songs". Never open, sort, or
+  change any other playlist, even on the test accounts.
+- Use the `live` session, with its profile kept in the gitignored
+  `.playwright-cli/live-profile`:
+  `playwright-cli -s=live open http://127.0.0.1:5173 --headed --profile=.playwright-cli/live-profile`.
+  The first time, ask the user to sign in to the Spotify test profile in
+  that window. Never type credentials.
+- YouTube Music needs `npm run dev` (it starts the proxy) and a
+  `proxy/browser.json` captured from the YouTube test profile.
+- Reordering "test punjabi songs" needs no permission. After checking
+  the result, press Undo, reload, and confirm the original order is back.
+  If Undo isn't offered or fails, stop and tell the user what state the
+  playlist is in.
+- Creating a playlist (a clone, or anything else that makes a new one)
+  needs the user's OK first. Say exactly what will be created and what
+  it tests. Afterwards, list every playlist created so the user can
+  delete it; the app can't.
+- Any other kind of write needs the user's OK first.
+
+### Clean up
+
+Close every session you opened (`playwright-cli -s=<name> close`) and
+stop any server you started. Snapshots, screenshots, and logs land in
+`.playwright-cli/`, which is gitignored. Never stage them.
