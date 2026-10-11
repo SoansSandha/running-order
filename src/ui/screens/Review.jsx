@@ -350,11 +350,11 @@ function TrackCell({ track, href, note = null }) {
   return (
     <span className="cell-stack" role="cell">
       <span className="row-title">{titleOf(track)}</span>
-      <span className="row-sub">
-        {artistsOf(track)}
+      <span className="row-sub row-sub-links">
+        <span className="row-sub-text">{artistsOf(track)}</span>
         {href ? (
           <>
-            {' · '}
+            ·
             <a className="row-play" href={href} target="_blank" rel="noreferrer">
               Play
             </a>

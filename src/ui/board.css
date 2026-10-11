@@ -164,6 +164,16 @@
   background: var(--board);
 }
 
+/* A narrow column wraps its label rather than running it into the next one,
+   and clips a single word that still cannot fit. */
+.board-cols > * {
+  overflow: hidden;
+}
+
+.board-cols > .col-label {
+  white-space: normal;
+}
+
 .board-scroll {
   flex: 1;
   min-height: 0;
@@ -940,6 +950,8 @@
 }
 
 .peek-title {
+  /* A span is inline, and overflow and ellipsis do not apply to inline boxes. */
+  display: block;
   font-size: var(--fs-row);
   font-weight: 500;
   white-space: nowrap;
@@ -970,6 +982,13 @@
 /* The track cell stacks a title over its artist on narrow screens. */
 .cell-stack {
   align-items: flex-start;
+}
+
+/* flex-start sizes each line to its own text, so without a cap a long title
+   is wider than its cell, its ellipsis never engages, and it runs into the
+   next column. */
+.cell-stack > * {
+  max-width: 100%;
 }
 
 /* Cells that lay out horizontally must say so: the shared cell rule sets
@@ -1133,7 +1152,21 @@
   font-size: var(--fs-sub);
 }
 
+/* The artists shorten to fit; the Play link after them never does, or a long
+   credit list would cut it off. */
+.row-sub-links {
+  display: flex;
+  gap: 0.35em;
+}
+
+.row-sub-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .row-play {
+  flex: none;
   color: var(--flap);
 }
 
