@@ -296,6 +296,8 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     found,
     sweep,
     unsearchedCount: unsearched.spotify.length + unsearched.youtube.length,
+    youtubeIds,
+    spotifyKeys,
     searchAll,
     stopSearch,
   }
