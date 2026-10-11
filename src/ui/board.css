@@ -128,7 +128,7 @@
   /* Access gets its own track. Sharing Tracks' width meant a "CLONE ONLY"
      chip plus the count needed ~125px in an 11ch column, and because the
      cell is justify-content: flex-end the excess spilled LEFT, over Owner. */
-  --cols: 64px minmax(0, 1fr) 14ch 7ch 13ch;
+  --cols: 64px minmax(0, 1fr) 14ch 7ch 15ch;
   --row-h: 58px;
 }
 
