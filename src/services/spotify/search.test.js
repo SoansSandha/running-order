@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { searchTracks } from './search.js'
+import { getTrack, searchTracks } from './search.js'
 
 // A search result as the Web API returns it: a bare track object.
 const track = (id, name, artist, durationMs) => ({
@@ -47,5 +47,19 @@ describe('searchTracks', () => {
 
   test('an answer with no tracks is no results', async () => {
     expect(await searchTracks(clientAnswering({}), 'q')).toEqual([])
+  })
+})
+
+describe('getTrack', () => {
+  test('reads one track by id, normalized as a playlist row is', async () => {
+    const client = clientAnswering(track('7fnd0BMPbWuMsn6lBrshZL', 'Taal Se Taal - Remix', 'Alka Yagnik', 164848))
+    const found = await getTrack(client, '7fnd0BMPbWuMsn6lBrshZL')
+    expect(client.get).toHaveBeenCalledWith('/tracks/7fnd0BMPbWuMsn6lBrshZL')
+    expect(found).toMatchObject({
+      id: '7fnd0BMPbWuMsn6lBrshZL',
+      name: 'Taal Se Taal - Remix',
+      durationMs: 164848,
+      source: 'spotify',
+    })
   })
 })

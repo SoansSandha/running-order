@@ -130,6 +130,14 @@ describe('normalizeYouTubeSearchResults', () => {
     expect(track.primaryArtist).toEqual({ id: null, name: 'Kaléra' })
   })
 
+  test('reads a watch-playlist track, which gives its length only as text', () => {
+    // Shape verbatim from get_watch_playlist on AJA's official video, 2026-10-10.
+    const watched = { ...AJA_VIDEO, duration_seconds: undefined, length: '2:16' }
+    expect(normalizeYouTubeSearchResults([watched])[0].durationMs).toBe(136000)
+    expect(normalizeYouTubeSearchResults([{ ...watched, length: '1:02:03' }])[0].durationMs).toBe(3723000)
+    expect(normalizeYouTubeSearchResults([{ ...watched, length: 'LIVE' }])[0].durationMs).toBe(0)
+  })
+
   test('drops a result with no videoId, which can be neither played nor paired', () => {
     const tracks = normalizeYouTubeSearchResults([{ ...AJA_VIDEO, videoId: null }, AJA_VIDEO])
     expect(tracks.map((track) => [track.id, track.originalIndex])).toEqual([['q7e348rz27I', 0]])

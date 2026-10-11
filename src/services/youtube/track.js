@@ -78,7 +78,8 @@ function toTrack(raw, originalIndex, itemId) {
     // No release date is returned at any level, so no album sorts by date.
     releaseDateSortable: null,
 
-    durationMs: (raw.duration_seconds ?? 0) * 1000,
+    // A watch-playlist track (a pasted link) gives its length only as text.
+    durationMs: (raw.duration_seconds ?? secondsOf(raw.length)) * 1000,
     popularity: 0,
     explicit: raw.isExplicit === true,
     trackNumber: 0,
@@ -98,4 +99,11 @@ function toTrack(raw, originalIndex, itemId) {
     isUnavailable: raw.isAvailable === false,
     isEpisode: false,
   }
+}
+
+/** "2:16" or "1:02:03" as seconds; 0 for anything else. */
+function secondsOf(length) {
+  const parts = String(length ?? '').split(':')
+  if (parts.length < 2 || parts.some((part) => !/^\d+$/.test(part))) return 0
+  return parts.reduce((total, part) => total * 60 + Number(part), 0)
 }
