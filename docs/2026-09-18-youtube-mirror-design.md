@@ -443,6 +443,7 @@ A durable local record of human decisions:
 Stored in `localStorage` with the same try/catch discipline as undo snapshots
 — a blocked store degrades the experience, it never breaks a sync.
 Exportable and importable as JSON so it survives a cleared browser.
+*Deferred (2026-10-05): export and import wait until the book holds real work; see the match review design §8.*
 
 Rejections are stored (D16). A `different` verdict suppresses that pair
 permanently rather than re-proposing it every run.
