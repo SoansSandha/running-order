@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { normalizeYouTubeSearchResults } from '../services/youtube/track.js'
-import { findOnSpotify, findOnYouTube } from './findTwin.js'
+import { findOnSpotify, findOnYouTube, rankResults } from './findTwin.js'
 
 // A Spotify track as the app normalizes it. Values below are verbatim from the
 // live Punjabi Songs export.
@@ -184,5 +184,55 @@ describe('findOnSpotify', () => {
       candidates: [],
       nearMisses: [],
     })
+  })
+})
+
+describe('rankResults', () => {
+  const brown = spotify(
+    '2w8OTd8nwVEcDA60S4Ws92',
+    'BROWN BROWN RANG',
+    ['Chani Nattan', 'Inderpal Moga', 'Karam Brar', 'G-Funk'],
+    176818,
+    'US38Y2507058',
+    'NICE DAY IN THE PIND',
+  )
+  const [arabic, exact] = normalizeYouTubeSearchResults([
+    result('u1n1E3PMm0A', 'انا 5 استار على كوكبى', ['Hamo El Morshedy'], 279, OMV),
+    result('26Ec977sp8A', 'BROWN BROWN RANG', ['Chani Nattan', 'Inderpal Moga', 'Karam Brar', 'G-Funk'], 177, ATV, 'NICE DAY IN THE PIND'),
+  ])
+
+  test('what the matcher accepts comes first, each result with its verdict', () => {
+    expect(rankResults(brown, [arabic, exact], { side: 'youtube' }).map((row) => [row.track.id, row.accepted, row.verdict])).toEqual([
+      ['26Ec977sp8A', true, 'strong: title and artist match exactly'],
+      ['u1n1E3PMm0A', false, 'no match: lengths differ by 102s, different title, no artist in common'],
+    ])
+  })
+
+  test('refused results keep their search order', () => {
+    const later = { ...arabic, id: 'second00000' }
+    expect(rankResults(brown, [arabic, later], { side: 'youtube' }).map((row) => row.track.id)).toEqual([
+      'u1n1E3PMm0A',
+      'second00000',
+    ])
+  })
+
+  test('a result already in the other playlist is marked', () => {
+    const rows = rankResults(brown, [arabic, exact], { side: 'youtube', inOtherPlaylist: (track) => track.id === '26Ec977sp8A' })
+    expect(rows.map((row) => [row.track.id, row.already])).toEqual([
+      ['26Ec977sp8A', true],
+      ['u1n1E3PMm0A', false],
+    ])
+  })
+
+  test('Spotify results are judged with the song on the YouTube side', () => {
+    const sheeshaVideo = normalizeYouTubeSearchResults([
+      result('sheeshaOMV', 'Sheesha | Karan Aujla | J Statik | Sagar Deol | New Punjabi Song 2022', ['Karan Aujla'], 176, OMV),
+    ])[0]
+    const slowed = spotify('s2', 'Sheesha (Slowed + Reverb)', ['Karan Aujla'], 200000, null, 'Sheesha')
+    const sheesha = spotify('s1', 'Sheesha', ['Karan Aujla'], 161000, null, 'Sheesha')
+    expect(rankResults(sheeshaVideo, [slowed, sheesha], { side: 'spotify' }).map((row) => [row.track.id, row.verdict])).toEqual([
+      ['s1', 'likely: the durations differ by 15s'],
+      ['s2', 'no match: lengths differ by 24s, different title'],
+    ])
   })
 })

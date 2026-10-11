@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { recordDecision, snapshotOf } from './matchBook.js'
-import { settleFound } from './settleFound.js'
+import { markKeysOf, recordDecision, replaceProposal, snapshotOf, verdictLookup } from './matchBook.js'
+import { scoreCandidates, settlePairs } from './pairTracks.js'
+import { setAsideMarked, settleFound } from './settleFound.js'
 
 const sp = (id, name, durationMs) => ({
   id,
@@ -203,5 +204,96 @@ describe('settleFound', () => {
     )
     expect(result.pairs).toEqual([playlistPair])
     expect(result.pairs[0]).toBe(playlistPair)
+  })
+})
+
+describe('picking another for a proposal (match tray §3)', () => {
+  const song = sp('s1', 'Antidote', 188000)
+  const proposed = yt('y1', 'Antidote', 191000)
+  const pick = yt('y2', 'Antidote', 188000)
+  // The review's own pipeline: settlePairs, then settleFound.
+  const review = (book) =>
+    settleFound(
+      settlePairs([song], [proposed], scoreCandidates([song], [proposed]), { verdictFor: verdictLookup(book) }),
+      { spotifyTracks: [song], youtubeTracks: [proposed], book },
+    )
+  const proposal = { spotifyKey: 's1', youtubeVideoId: 'y1' }
+
+  test('a pick in neither playlist replaces the proposal', () => {
+    const picked = { spotifyKey: 's1', youtubeVideoId: 'y2', found: snapshotOf(pick, 'youtube') }
+    // C-1: a `same` for the pick alone leaves the proposal standing.
+    expect(summary(review(recordDecision([], { ...picked, verdict: 'same' }, 1)))).toEqual([
+      ['s1', 'y1', 'likely', undefined],
+    ])
+    const result = review(replaceProposal([], proposal, picked, 1))
+    expect(summary(result)).toEqual([['s1', 'y2', 'certain', 'youtube']])
+    expect(result.unmatchedYoutube).toEqual([proposed])
+  })
+
+  test("picking the proposal's own track confirms it", () => {
+    const book = replaceProposal([], proposal, proposal, 1)
+    expect(book).toEqual([{ spotifyKey: 's1', youtubeVideoId: 'y1', verdict: 'same', decidedAt: 1 }])
+    expect(summary(review(book))).toEqual([['s1', 'y1', 'certain', undefined]])
+  })
+})
+
+describe('setting aside songs marked as not on the other service (no-match design §4)', () => {
+  const song = sp('s1', 'Antidote', 188000)
+  const other = sp('s2', 'Sheesha', 161000)
+  const video = yt('y9', 'Softly', 200000)
+  const markSpotify = (spotifyKey) => ({ spotifyKey, youtubeVideoId: null, verdict: 'none', decidedAt: 1 })
+  const markYoutube = (youtubeVideoId) => ({ spotifyKey: null, youtubeVideoId, verdict: 'none', decidedAt: 1 })
+
+  test('a marked song leaves its unmatched list, on either side', () => {
+    const aside = setAsideMarked(nothingPaired([song, other], [video]), [markSpotify('s1'), markYoutube('y9')])
+    expect(aside.unmatchedSpotify).toEqual([other])
+    expect(aside.markedSpotify).toEqual([song])
+    expect(aside.unmatchedYoutube).toEqual([])
+    expect(aside.markedYoutube).toEqual([video])
+  })
+
+  test('with no marks nothing moves', () => {
+    const settled = nothingPaired([song], [video])
+    expect(setAsideMarked(settled, [])).toEqual({ ...settled, markedSpotify: [], markedYoutube: [] })
+  })
+
+  test('a song listed twice is set aside in both copies', () => {
+    const copy = { ...song }
+    const aside = setAsideMarked(nothingPaired([song, copy], []), [markSpotify('s1')])
+    expect(aside.markedSpotify).toEqual([song, copy])
+    expect(aside.unmatchedSpotify).toEqual([])
+  })
+
+  test('a mark is ignored once the song pairs from the two playlists (D38)', () => {
+    const twin = yt('y1', 'Antidote', 188000)
+    const book = [markSpotify('s1')]
+    const settled = settlePairs([song], [twin], scoreCandidates([song], [twin]), { verdictFor: verdictLookup(book) })
+    const aside = setAsideMarked(settled, book)
+    expect(aside.pairs.map((pair) => [pair.spotify.id, pair.youtube.id])).toEqual([['s1', 'y1']])
+    expect(aside.markedSpotify).toEqual([])
+  })
+
+  test('a marked song gets no find, even with candidates from a sweep', () => {
+    const y1 = yt('y1', 'Antidote', 188000)
+    const book = [markSpotify('s1')]
+    const result = settleFound(setAsideMarked(nothingPaired([song], []), book), {
+      spotifyTracks: [song],
+      youtubeTracks: [],
+      book,
+      foundForSpotify: new Map([['s1', { candidates: [found(song, y1, 'strong')] }]]),
+    })
+    expect(result.pairs).toEqual([])
+    expect(result.unmatchedSpotify).toEqual([])
+  })
+
+  test.each([
+    ['a Spotify local file', { ...sp('s1', 'Antidote', 188000), id: null, uri: 'spotify:local:Karan+Aujla:Antidote:Antidote:188', source: 'spotify' }, 'spotify'],
+    ['a YouTube song', { ...yt('y9', 'Softly', 200000), source: 'youtube' }, 'youtube'],
+  ])('a mark filed for %s is found when setting aside', (_label, song, side) => {
+    const book = recordDecision([], { ...markKeysOf(song), verdict: 'none' }, 1)
+    const settled = side === 'spotify' ? nothingPaired([song], []) : nothingPaired([], [song])
+    const aside = setAsideMarked(settled, book)
+    expect(aside[side === 'spotify' ? 'markedSpotify' : 'markedYoutube']).toEqual([song])
+    expect(aside[side === 'spotify' ? 'unmatchedSpotify' : 'unmatchedYoutube']).toEqual([])
   })
 })

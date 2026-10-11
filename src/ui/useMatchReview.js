@@ -15,13 +15,15 @@ import {
   findSnapshotFor,
   forgetDecision,
   loadMatchBook,
+  markKeysOf,
   recordDecision,
+  replaceProposal,
   saveMatchBook,
   spotifyKeyOf,
   verdictLookup,
 } from '../match/matchBook.js'
 import { scoreCandidates, settlePairs } from '../match/pairTracks.js'
-import { settleFound } from '../match/settleFound.js'
+import { setAsideMarked, settleFound } from '../match/settleFound.js'
 import { AuthError, RateLimitError } from '../services/spotify/client.js'
 import { searchTracks } from '../services/spotify/search.js'
 import { ProxyUnavailableError, YouTubeSessionExpiredError } from '../services/youtube/client.js'
@@ -144,18 +146,23 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     [spotifyTracks, youtubeTracks, scored, book],
   )
 
-  const result = useMemo(
-    () =>
-      settled &&
-      settleFound(settled, {
+  // No-match §4: marked songs are set aside before finds are placed, so
+  // settleFound proposes none for them.
+  const result = useMemo(() => {
+    if (!settled) return null
+    const aside = setAsideMarked(settled, book)
+    return {
+      ...settleFound(aside, {
         spotifyTracks,
         youtubeTracks,
         book,
         foundForSpotify: found.forSpotify,
         foundForYoutube: found.forYoutube,
       }),
-    [settled, spotifyTracks, youtubeTracks, book, found],
-  )
+      markedSpotify: aside.markedSpotify,
+      markedYoutube: aside.markedYoutube,
+    }
+  }, [settled, spotifyTracks, youtubeTracks, book, found])
 
   // What a sweep would search: unmatched songs with a title, not searched
   // yet. One search serves a song listed twice.
@@ -270,12 +277,52 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     [book, commit, recentlyDecided, findOf],
   )
 
+  // Match tray §3: picking another replaces a proposal. One save for both
+  // decisions; a second decide would fall to the 400ms guard and start from
+  // the same stale book.
+  const pickAnother = useCallback(
+    (pair, spotifyTrack, youtubeTrack) => {
+      if (recentlyDecided()) return
+      const spotifyKey = spotifyKeyOf(spotifyTrack)
+      if (spotifyKey == null || youtubeTrack?.id == null) return // M-3
+      commit(
+        replaceProposal(
+          book,
+          { spotifyKey: spotifyKeyOf(pair.spotify), youtubeVideoId: pair.youtube?.id },
+          { spotifyKey, youtubeVideoId: youtubeTrack.id, found: findOf(spotifyTrack, youtubeTrack) },
+        ),
+      )
+    },
+    [book, commit, recentlyDecided, findOf],
+  )
+
   const undo = useCallback(
     (pair) => {
       if (recentlyDecided()) return
       const spotifyKey = spotifyKeyOf(pair.spotify)
       if (spotifyKey == null || pair.youtube?.id == null) return // M-3
       commit(forgetDecision(book, spotifyKey, pair.youtube.id))
+    },
+    [book, commit, recentlyDecided],
+  )
+
+  // No-match §3: a mark is a one-sided decision, filed under the song's own key.
+  const markNoMatch = useCallback(
+    (song) => {
+      if (recentlyDecided()) return
+      const keys = markKeysOf(song)
+      if (!keys) return // M-3
+      commit(recordDecision(book, { ...keys, verdict: 'none' }))
+    },
+    [book, commit, recentlyDecided],
+  )
+
+  const unmark = useCallback(
+    (song) => {
+      if (recentlyDecided()) return
+      const keys = markKeysOf(song)
+      if (!keys) return // M-3
+      commit(forgetDecision(book, keys.spotifyKey, keys.youtubeVideoId))
     },
     [book, commit, recentlyDecided],
   )
@@ -292,10 +339,15 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     remembered,
     decide,
     confirmAll,
+    pickAnother,
     undo,
+    markNoMatch,
+    unmark,
     found,
     sweep,
     unsearchedCount: unsearched.spotify.length + unsearched.youtube.length,
+    youtubeIds,
+    spotifyKeys,
     searchAll,
     stopSearch,
   }

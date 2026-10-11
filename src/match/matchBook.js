@@ -18,6 +18,16 @@ export function spotifyKeyOf(track) {
   return track?.id ?? track?.uri ?? null
 }
 
+/**
+ * Where a no-match mark on this song is filed (no-match design §3): under its
+ * own key, with the other side null. Null for a song with no key (M-3).
+ */
+export function markKeysOf(song) {
+  if (song?.source === 'youtube') return song.id == null ? null : { spotifyKey: null, youtubeVideoId: song.id }
+  const key = spotifyKeyOf(song)
+  return key == null ? null : { spotifyKey: key, youtubeVideoId: null }
+}
+
 /** Every stored decision. A missing, blocked or unreadable store is an empty book. */
 export function loadMatchBook(storage = globalThis.localStorage) {
   try {
@@ -50,6 +60,17 @@ export function recordDecision(book, { spotifyKey, youtubeVideoId, verdict, foun
   const entry = { spotifyKey, youtubeVideoId, verdict, decidedAt }
   if (found) entry.found = found
   return [...forgetDecision(book, spotifyKey, youtubeVideoId), entry]
+}
+
+/**
+ * The book once the owner picks another track for a proposal (match tray
+ * design §3): `different` for the proposal, then `same` for the pick. A pick
+ * in neither playlist leaves settlePairs claiming the proposal unless it is
+ * rejected. A pick of the proposal's own track overwrites the `different`.
+ */
+export function replaceProposal(book, proposal, pick, decidedAt = Date.now()) {
+  const rejected = recordDecision(book, { ...proposal, verdict: 'different' }, decidedAt)
+  return recordDecision(rejected, { ...pick, verdict: 'same' }, decidedAt)
 }
 
 /**
@@ -113,7 +134,9 @@ export function forgetDecision(book, spotifyKey, youtubeVideoId) {
  * the live playlists — so a scan of the book per question is not an option.
  */
 export function verdictLookup(book) {
-  const verdicts = new Map(book.map((entry) => [pairKey(entry.spotifyKey, entry.youtubeVideoId), entry.verdict]))
+  // A no-match mark is about one song, not a pair, so pairing never sees it.
+  const pairs = book.filter((entry) => entry.verdict !== 'none')
+  const verdicts = new Map(pairs.map((entry) => [pairKey(entry.spotifyKey, entry.youtubeVideoId), entry.verdict]))
   return (spotifyKey, youtubeVideoId) => verdicts.get(pairKey(spotifyKey, youtubeVideoId)) ?? null
 }
 
@@ -122,11 +145,11 @@ function pairKey(spotifyKey, youtubeVideoId) {
 }
 
 function isDecision(entry) {
-  return (
-    typeof entry?.spotifyKey === 'string' &&
-    typeof entry?.youtubeVideoId === 'string' &&
-    VERDICTS.has(entry?.verdict)
-  )
+  const spotify = typeof entry?.spotifyKey === 'string'
+  const youtube = typeof entry?.youtubeVideoId === 'string'
+  // No-match design §3: a mark names one song, so exactly one side, the other null.
+  if (entry?.verdict === 'none') return spotify ? entry.youtubeVideoId === null : youtube && entry.spotifyKey === null
+  return spotify && youtube && VERDICTS.has(entry?.verdict)
 }
 
 /** A decision whose `found` is not a snapshot keeps the decision and loses the `found`. */

@@ -1,6 +1,6 @@
 # Status
 
-**Last updated:** 2026-09-30 · **HEAD:** `see git log`
+**Last updated:** 2026-10-11 · **HEAD:** `see git log`
 
 Design and decisions: [2026-09-09-design.md](2026-09-09-design.md).
 Product truth: [../PRODUCT.md](../PRODUCT.md).
@@ -16,8 +16,8 @@ This file tracks only what is built and what is next.
 
 ## Where things stand
 
-All logic layers and all five screens are built. **550 JavaScript tests across
-25 files, all passing** (plus 18 Python tests for the proxy). Build clean,
+All logic layers and all five screens are built. **699 JavaScript tests across
+33 files, all passing** (plus 25 Python tests for the proxy). Build clean,
 design detector clean, working tree clean.
 
 The project was renamed from `spotify-playlist-sorter` to **Running Order**
@@ -345,6 +345,38 @@ one** instead of as an empty library; fresh credentials are picked up without
 a restart (see [proxy/README.md](../proxy/README.md)).
 
 The rest is in the design's §14.
+
+### Match review, catalogue search and the match tray — done 2026-10-11
+
+A Spotify playlist's Sort screen opens a review against a YouTube Music
+playlist. Pairs are proposed as strong or likely, and settled pairs are kept
+in the match book (`localStorage`, `playlist-sorter:match-book`), so a reload
+keeps them. **Search all unmatched** looks for every unmatched song's twin in
+the other service's catalogue, ISRC first towards YouTube, and proposes what
+`scorePair` accepts (spec:
+[2026-10-08-catalogue-search-design.md](2026-10-08-catalogue-search-design.md)).
+Every row opens a tray beneath it. There the owner hears both sides, opens
+either in its own service, searches in their own words, or pastes a Spotify
+or YouTube Music link to pair (spec:
+[2026-10-10-match-tray-design.md](2026-10-10-match-tray-design.md)).
+
+A song the owner has checked can be marked as not on the other service from
+its tray. It leaves the unmatched groups, is never searched for again, and is
+listed under "Not on the other service" with Undo (spec:
+[2026-10-11-no-match-design.md](2026-10-11-no-match-design.md)).
+
+Read-only: nothing is written to either service. `scripts/check-columns.js`
+checks every screen for spilling columns at six widths. Signed off by the
+owner on 2026-10-11 after settling every song on "test punjabi songs" on the
+test profiles: 469 pairs settled, 6 songs marked as not on the other service,
+none left unmatched.
+
+Left open:
+- How a deleted or private YouTube video reads through `/track` is not yet
+  measured. Until it is, the proxy reads every YouTube server error there as
+  "That track could not be found." (a rate limit included).
+- A song listed twice, one copy paired: marking the other copy as not on the
+  other service sets both aside. Rare, and Undo restores both.
 
 ---
 

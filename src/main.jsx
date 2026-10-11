@@ -9,6 +9,7 @@ import '@fontsource-variable/azeret-mono'
 
 import './ui/theme.css'
 import './ui/board.css'
+import './ui/review.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

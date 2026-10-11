@@ -9,7 +9,7 @@
  */
 
 import { TIER_RANK } from './pairTracks.js'
-import { queryTitle, scorePair } from './scorePair.js'
+import { explainPair, queryTitle, scorePair } from './scorePair.js'
 
 /**
  * A Spotify song's twin on YouTube Music: its ISRC first (D30), then title
@@ -81,4 +81,35 @@ async function runCascade(steps, skipIds = new Set(), judge) {
 /** Spotify's field syntax quotes a value, so a stray double quote would end it early. */
 function unquote(text) {
   return String(text).replaceAll('"', ' ').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Search results for one song, as the match tray lists them (design §4): what
+ * the matcher accepts first, surest then nearest in length, then the rest in
+ * search order. Each carries the matcher's verdict in words, and whether it is
+ * already in the other playlist.
+ *
+ * @param {object} song the song being matched
+ * @param {Array} results Tracks from the other service
+ * @param {{side: 'youtube'|'spotify', inOtherPlaylist?: (track: object) => boolean}} options
+ *   side names the service the results come from
+ * @returns {Array<{track: object, verdict: string, accepted: boolean, already: boolean}>}
+ */
+export function rankResults(song, results, { side, inOtherPlaylist = () => false }) {
+  const rows = results.map((track, index) => {
+    const [spotify, youtube] = side === 'youtube' ? [song, track] : [track, song]
+    return { track, index, scored: scorePair(spotify, youtube), verdict: explainPair(spotify, youtube) }
+  })
+  rows.sort(
+    (a, b) =>
+      (TIER_RANK[b.scored?.tier] ?? 0) - (TIER_RANK[a.scored?.tier] ?? 0) ||
+      (a.scored && b.scored ? Math.abs(a.scored.durationDeltaMs) - Math.abs(b.scored.durationDeltaMs) : 0) ||
+      a.index - b.index,
+  )
+  return rows.map(({ track, scored, verdict }) => ({
+    track,
+    verdict,
+    accepted: scored !== null,
+    already: inOtherPlaylist(track),
+  }))
 }

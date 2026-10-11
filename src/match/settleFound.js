@@ -2,7 +2,8 @@
  * Settling what catalogue search found (Plan B), after the two playlists have
  * been paired.
  *
- * Pure. It runs on settlePairs' leftovers only, so playlist pairing never
+ * Pure. It runs on settlePairs' leftovers only, less any song the owner marked
+ * as not on the other service (setAsideMarked, below), so playlist pairing never
  * changes: each unmatched song takes its best found twin that the user has
  * not rejected, and a confirmed find — rebuilt from its match-book snapshot,
  * with no search — is certain. See docs/2026-10-08-catalogue-search-design.md §5.
@@ -12,7 +13,7 @@ import { spotifyKeyOf, trackFromSnapshot, verdictLookup } from './matchBook.js'
 import { TIER_RANK, countsOf } from './pairTracks.js'
 
 /**
- * @param {{pairs: Array, unmatchedSpotify: Array, unmatchedYoutube: Array}} settled what settlePairs returned
+ * @param {{pairs: Array, unmatchedSpotify: Array, unmatchedYoutube: Array}} settled what settlePairs returned, with marked songs set aside (setAsideMarked)
  * @param {object} context
  * @param {Array} context.spotifyTracks the Spotify playlist
  * @param {Array} context.youtubeTracks the YouTube playlist
@@ -94,6 +95,29 @@ export function settleFound(
     unmatchedSpotify,
     unmatchedYoutube,
     counts: countsOf(pairs, unmatchedSpotify, unmatchedYoutube),
+  }
+}
+
+/**
+ * Songs left unmatched once the two playlists are paired, less those the
+ * owner marked as not on the other service (no-match design §4). The marked
+ * ones are set aside before settleFound runs, so no find is proposed for
+ * them. A song that pairs from the playlists is not touched (D38).
+ *
+ * @returns the shape settlePairs returns, plus `markedSpotify` and `markedYoutube`
+ */
+export function setAsideMarked(settled, book) {
+  const marks = book.filter((entry) => entry.verdict === 'none')
+  const spotifyMarks = new Set(marks.map((entry) => entry.spotifyKey).filter((key) => key != null))
+  const youtubeMarks = new Set(marks.map((entry) => entry.youtubeVideoId).filter((id) => id != null))
+  const markedSpotify = (track) => spotifyMarks.has(spotifyKeyOf(track))
+  const markedYoutube = (track) => youtubeMarks.has(track.id)
+  return {
+    ...settled,
+    unmatchedSpotify: settled.unmatchedSpotify.filter((track) => !markedSpotify(track)),
+    unmatchedYoutube: settled.unmatchedYoutube.filter((track) => !markedYoutube(track)),
+    markedSpotify: settled.unmatchedSpotify.filter(markedSpotify),
+    markedYoutube: settled.unmatchedYoutube.filter(markedYoutube),
   }
 }
 

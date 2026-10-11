@@ -5,21 +5,27 @@
  * YouTube. Likely rows warm amber (pending) and settled rows take the green
  * seat (committed), reusing the board's data-moves and data-written states.
  * "Search all unmatched" looks for the leftovers' twins in the other
- * service's catalogue. See docs/2026-10-05-match-review-design.md §3 and
- * docs/2026-10-08-catalogue-search-design.md §6.
+ * service's catalogue, and every row opens a tray beneath it where one song
+ * is matched by hand. See docs/2026-10-05-match-review-design.md §3,
+ * docs/2026-10-08-catalogue-search-design.md §6 and
+ * docs/2026-10-10-match-tray-design.md.
  */
 
+import { useState } from 'react'
 import { spotifyKeyOf } from '../../match/matchBook.js'
 import { closestTitles } from '../../match/pairTracks.js'
-import { artistsOf, formatCount, formatDelta, titleOf } from '../format.js'
+import { explainPair } from '../../match/scorePair.js'
+import { artistsOf, formatCount, formatDelta, openHref, titleOf } from '../format.js'
 import { useMatchReview } from '../useMatchReview.js'
 import { Frame, Head, Lever, LeverRow, Meter, Notice, QuietLever } from '../components/chrome.jsx'
 import { UnlitField } from '../components/UnlitField.jsx'
+import { MatchTray } from './MatchTray.jsx'
 
 export function ReviewScreen({ app }) {
   const { playlist, tracks, youtube, client, setScreen } = app
   const review = useMatchReview({ youtube, spotify: client, spotifyTracks: tracks })
   const { result, sweep } = review
+  const [openKey, setOpenKey] = useState(null)
   const tier = (name) => result?.pairs.filter((pair) => pair.tier === name) ?? []
   const likely = tier('likely')
   const strong = tier('strong')
@@ -27,6 +33,66 @@ export function ReviewScreen({ app }) {
   // M-1: a row can move mid-decision while a sweep lands results, so deciding
   // waits until it ends or is stopped.
   const deciding = sweep?.running === true
+
+  const toggle = (key) => setOpenKey((open) => (open === key ? null : key))
+  const close = () => setOpenKey(null)
+  const clients = { youtube, spotify: client }
+
+  /** Everything the tray needs to match one playlist song. */
+  const trayFor = (song, side, extra = {}) => {
+    const onYoutube = side === 'spotify'
+    // No-match D39: an unmatched song or a proposed find can be marked as not
+    // on the other service; a pair from the two playlists or a settled one cannot.
+    const markable = !extra.pair || (extra.pair.missingFrom != null && !extra.settled)
+    return (
+      <MatchTray
+        song={song}
+        side={side}
+        sweepResults={searchOptionsOf(
+          onYoutube ? review.found.forYoutube.get(song.id) : review.found.forSpotify.get(spotifyKeyOf(song)),
+          side,
+        )}
+        leftovers={closestTitles(song, onYoutube ? result.unmatchedSpotify : result.unmatchedYoutube)}
+        inOtherPlaylist={(track) =>
+          onYoutube ? review.spotifyKeys.has(spotifyKeyOf(track)) : review.youtubeIds.has(track.id)
+        }
+        clients={clients}
+        deciding={deciding}
+        onPair={(chosen) => {
+          const [spotifyTrack, youtubeTrack] = onYoutube ? [chosen, song] : [song, chosen]
+          // §3: a pick in a proposal's tray replaces the proposal.
+          if (extra.pair) review.pickAnother(extra.pair, spotifyTrack, youtubeTrack)
+          else review.decide(spotifyTrack, youtubeTrack, 'same')
+          close()
+        }}
+        onNoMatch={
+          markable
+            ? () => {
+                review.markNoMatch(song)
+                close()
+              }
+            : undefined
+        }
+        onClose={close}
+        {...extra}
+      />
+    )
+  }
+
+  /** A pair's tray matches its playlist-side song: the YouTube one for a Spotify find. */
+  const pairTray = (pair, state) =>
+    trayFor(pair.missingFrom === 'spotify' ? pair.youtube : pair.spotify, pair.missingFrom === 'spotify' ? 'spotify' : 'youtube', {
+      pair,
+      settled: state === 'settled',
+      onDecide: (verdict) => {
+        review.decide(pair.spotify, pair.youtube, verdict)
+        close()
+      },
+      onUndo: () => {
+        review.undo(pair)
+        close()
+      },
+    })
 
   return (
     <Frame fill>
@@ -139,62 +205,92 @@ export function ReviewScreen({ app }) {
           <div className="board-cols" role="row">
             <span className="col-label">Spotify</span>
             <span className="col-label">YouTube Music</span>
-            <span className="col-label">Length</span>
+            <span className="col-label col-length">Length</span>
             <span className="col-label col-why">Why</span>
             <span className="col-label" />
           </div>
 
           <div className="board-scroll" role="table" aria-label="Matches">
             <GroupHeading count={likely.length}>Likely — check each one</GroupHeading>
-            {likely.map((pair) => (
-              <PairRow key={`l${rowKey(pair)}`} pair={pair} state="pending">
-                <DecisionLevers pair={pair} review={review} disabled={deciding} />
-              </PairRow>
-            ))}
+            {likely.map((pair) => {
+              const key = `l${rowKey(pair)}`
+              return (
+                <PairBlock key={key} pair={pair} state="pending" open={openKey === key} tray={() => pairTray(pair, 'pending')}>
+                  <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Listen" />
+                  <DecisionLevers pair={pair} review={review} disabled={deciding} />
+                </PairBlock>
+              )
+            })}
 
             <GroupHeading count={strong.length}>Strong</GroupHeading>
-            {strong.map((pair) => (
-              <PairRow key={`s${rowKey(pair)}`} pair={pair}>
-                <DecisionLevers pair={pair} review={review} disabled={deciding} />
-              </PairRow>
-            ))}
+            {strong.map((pair) => {
+              const key = `s${rowKey(pair)}`
+              return (
+                <PairBlock key={key} pair={pair} open={openKey === key} tray={() => pairTray(pair, 'strong')}>
+                  <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Listen" />
+                  <DecisionLevers pair={pair} review={review} disabled={deciding} />
+                </PairBlock>
+              )
+            })}
 
             <GroupHeading count={result.unmatchedSpotify.length}>Only on Spotify</GroupHeading>
-            {result.unmatchedSpotify.map((track) => (
-              <PickerRow
-                key={`o${track.originalIndex}`}
-                track={track}
-                side="spotify"
-                searchOptions={searchOptionsOf(review.found.forSpotify.get(spotifyKeyOf(track)), 'youtube')}
-                playlistOptions={closestTitles(track, result.unmatchedYoutube)}
-                onPair={(chosen) => review.decide(track, chosen, 'same')}
-                disabled={deciding}
-              />
-            ))}
+            {result.unmatchedSpotify.map((track) => {
+              const key = `o${track.originalIndex}`
+              return (
+                <UnmatchedBlock key={key} track={track} side="spotify" open={openKey === key} tray={() => trayFor(track, 'youtube')}>
+                  <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Find a match" />
+                </UnmatchedBlock>
+              )
+            })}
 
             <GroupHeading count={result.unmatchedYoutube.length}>Only on YouTube</GroupHeading>
-            {result.unmatchedYoutube.map((track) => (
-              <PickerRow
-                key={`y${track.originalIndex}`}
-                track={track}
-                side="youtube"
-                searchOptions={searchOptionsOf(review.found.forYoutube.get(track.id), 'spotify')}
-                playlistOptions={closestTitles(track, result.unmatchedSpotify)}
-                onPair={(chosen) => review.decide(chosen, track, 'same')}
-                disabled={deciding}
-              />
-            ))}
+            {result.unmatchedYoutube.map((track) => {
+              const key = `y${track.originalIndex}`
+              return (
+                <UnmatchedBlock key={key} track={track} side="youtube" open={openKey === key} tray={() => trayFor(track, 'spotify')}>
+                  <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Find a match" />
+                </UnmatchedBlock>
+              )
+            })}
 
             <details className="review-settled">
               <summary className="review-group col-label">
                 Settled (<span className="num">{formatCount(settled.length)}</span>)
               </summary>
-              {settled.map((pair) => (
-                <PairRow key={`c${rowKey(pair)}`} pair={pair} state="settled">
-                  <QuietLever className="lever-quiet is-compact" onClick={() => review.undo(pair)} disabled={deciding}>
+              {settled.map((pair) => {
+                const key = `c${rowKey(pair)}`
+                return (
+                  <PairBlock key={key} pair={pair} state="settled" open={openKey === key} tray={() => pairTray(pair, 'settled')}>
+                    <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Listen" />
+                    <span className="row-decide">
+                      <QuietLever className="lever-quiet is-compact" onClick={() => review.undo(pair)} disabled={deciding}>
+                        Undo
+                      </QuietLever>
+                    </span>
+                  </PairBlock>
+                )
+              })}
+            </details>
+
+            {/* No-match D40: marked songs are settled, and Undo is their one lever. */}
+            <details className="review-settled review-marked">
+              <summary className="review-group col-label">
+                Not on the other service (
+                <span className="num">{formatCount(result.markedSpotify.length + result.markedYoutube.length)}</span>)
+              </summary>
+              {result.markedSpotify.map((track) => (
+                <UnmatchedBlock key={`ms${track.originalIndex}`} track={track} side="spotify" note="Not on YouTube Music" marked>
+                  <QuietLever className="lever-quiet is-compact" onClick={() => review.unmark(track)} disabled={deciding}>
                     Undo
                   </QuietLever>
-                </PairRow>
+                </UnmatchedBlock>
+              ))}
+              {result.markedYoutube.map((track) => (
+                <UnmatchedBlock key={`my${track.originalIndex}`} track={track} side="youtube" note="Not on Spotify" marked>
+                  <QuietLever className="lever-quiet is-compact" onClick={() => review.unmark(track)} disabled={deciding}>
+                    Undo
+                  </QuietLever>
+                </UnmatchedBlock>
               ))}
             </details>
 
@@ -226,7 +322,7 @@ export function ReviewScreen({ app }) {
 const rowKey = (pair) =>
   pair.missingFrom === 'spotify' ? `y${pair.youtube.originalIndex}` : `p${pair.spotify.originalIndex}`
 
-/** Everything a search turned up for one song, accepted first, for Pair with…. */
+/** Everything the sweep turned up for one song, accepted first. */
 function searchOptionsOf(entry, side) {
   if (!entry) return []
   return [...entry.candidates.map((pair) => pair[side]), ...entry.nearMisses]
@@ -240,9 +336,17 @@ function GroupHeading({ count, children }) {
   )
 }
 
+function TrayToggle({ open, onClick, label }) {
+  return (
+    <QuietLever className="lever-quiet is-compact" aria-expanded={open} onClick={onClick}>
+      {open ? 'Close' : label}
+    </QuietLever>
+  )
+}
+
 function DecisionLevers({ pair, review, disabled }) {
   return (
-    <>
+    <span className="row-decide">
       <QuietLever
         className="lever-quiet is-compact"
         onClick={() => review.decide(pair.spotify, pair.youtube, 'same')}
@@ -257,96 +361,71 @@ function DecisionLevers({ pair, review, disabled }) {
       >
         Reject
       </QuietLever>
+    </span>
+  )
+}
+
+/** A pair row, and its tray beneath it when open. */
+function PairBlock({ pair, state, open, tray, children }) {
+  // §7: a settled row says what the matcher thinks, so a wrong pick stands out.
+  const reason = state === 'settled' ? `You confirmed this · the matcher says: ${explainPair(pair.spotify, pair.youtube)}` : pair.reason
+  return (
+    <>
+      <div
+        className="board-row"
+        role="row"
+        data-moves={state === 'pending' ? 'true' : undefined}
+        data-written={state === 'settled' ? 'true' : undefined}
+      >
+        <TrackCell track={pair.spotify} note={pair.missingFrom === 'spotify' ? 'Not in your Spotify playlist' : null} />
+        <TrackCell track={pair.youtube} note={pair.missingFrom === 'youtube' ? 'Not in your YouTube playlist' : null} />
+        <span className="cell-end col-length" role="cell">
+          <span className="row-meta num">{formatDelta(pair.durationDeltaMs)}</span>
+        </span>
+        <span className="row-sub col-why" role="cell">
+          {reason}
+        </span>
+        <span className="cell-end review-levers" role="cell">
+          {children}
+        </span>
+      </div>
+      {open ? tray() : null}
     </>
   )
 }
 
-function PairRow({ pair, state, children }) {
-  return (
-    <div
-      className="board-row"
-      role="row"
-      data-moves={state === 'pending' ? 'true' : undefined}
-      data-written={state === 'settled' ? 'true' : undefined}
-    >
-      <TrackCell
-        track={pair.spotify}
-        href={spotifyHref(pair.spotify)}
-        note={pair.missingFrom === 'spotify' ? 'Not in your Spotify playlist' : null}
-      />
-      <TrackCell
-        track={pair.youtube}
-        href={youtubeHref(pair.youtube)}
-        note={pair.missingFrom === 'youtube' ? 'Not in your YouTube playlist' : null}
-      />
-      <span className="cell-end" role="cell">
-        <span className="row-meta num">{formatDelta(pair.durationDeltaMs)}</span>
-      </span>
-      <span className="row-sub col-why" role="cell">
-        {pair.reason}
-      </span>
-      <span className="cell-end review-levers" role="cell">
-        {children}
-      </span>
-    </div>
-  )
-}
-
 /**
- * An unmatched song and its Pair with… picker: what search turned up for it
- * first, then the other playlist's leftovers, closest title first. The picker
- * sits in the other service's column.
+ * An unmatched song: itself in its own column, a note in the other, its
+ * levers, and its tray beneath it when open. A song marked as not on the
+ * other service is settled (no-match D40): it says so in Why and has no tray.
  */
-function PickerRow({ track, side, searchOptions, playlistOptions, onPair, disabled }) {
-  const options = [...searchOptions, ...playlistOptions]
-  const other = side === 'spotify' ? 'YouTube' : 'Spotify'
-  const own = <TrackCell track={track} href={side === 'spotify' ? spotifyHref(track) : youtubeHref(track)} />
-  const picker = (
-    <span role="cell">
-      <select
-        className="field field-compact"
-        value=""
-        aria-label={`Pair ${titleOf(track)} with a ${other} track`}
-        disabled={disabled}
-        onChange={(event) => {
-          const chosen = options[Number(event.target.value)]
-          if (chosen) onPair(chosen)
-        }}
-      >
-        <option value="">Pair with…</option>
-        {searchOptions.length > 0 ? (
-          <optgroup label="Search results">
-            {searchOptions.map((option, index) => (
-              <option key={`f${option.id}`} value={index}>
-                {titleOf(option)} — {artistsOf(option)}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-        {playlistOptions.length > 0 ? (
-          <optgroup label={`In your ${other} playlist`}>
-            {playlistOptions.map((option, index) => (
-              <option key={`p${option.originalIndex}`} value={searchOptions.length + index}>
-                {titleOf(option)} — {artistsOf(option)}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-      </select>
+function UnmatchedBlock({ track, side, note = 'No match yet', marked = false, open = false, tray, children }) {
+  const own = <TrackCell track={track} />
+  const none = (
+    <span className="row-sub" role="cell">
+      {note}
     </span>
   )
   return (
-    <div className="board-row" role="row">
-      {side === 'spotify' ? own : picker}
-      {side === 'spotify' ? picker : own}
-      <span role="cell" />
-      <span role="cell" className="col-why" />
-      <span role="cell" />
-    </div>
+    <>
+      <div className="board-row" role="row" data-written={marked ? 'true' : undefined}>
+        {side === 'spotify' ? own : none}
+        {side === 'spotify' ? none : own}
+        <span role="cell" className="col-length" />
+        <span className="row-sub col-why" role="cell">
+          {marked ? 'You marked this' : null}
+        </span>
+        <span className="cell-end review-levers" role="cell">
+          {children}
+        </span>
+      </div>
+      {open ? tray() : null}
+    </>
   )
 }
 
-function TrackCell({ track, href, note = null }) {
+function TrackCell({ track, note = null }) {
+  const href = openHref(track)
   return (
     <span className="cell-stack" role="cell">
       <span className="row-title">{titleOf(track)}</span>
@@ -356,7 +435,7 @@ function TrackCell({ track, href, note = null }) {
           <>
             ·
             <a className="row-play" href={href} target="_blank" rel="noreferrer">
-              Play
+              ↗ Open
             </a>
           </>
         ) : null}
@@ -365,7 +444,3 @@ function TrackCell({ track, href, note = null }) {
     </span>
   )
 }
-
-// A local file has no id and nothing to link to.
-const spotifyHref = (track) => (track?.id ? `https://open.spotify.com/track/${track.id}` : null)
-const youtubeHref = (track) => (track?.id ? `https://music.youtube.com/watch?v=${track.id}` : null)

@@ -619,3 +619,28 @@ function numbersIn(folded) {
 function capitalize(text) {
   return text ? text[0].toUpperCase() + text.slice(1) : text
 }
+
+/**
+ * The matcher's verdict on a pair, in words, for the match tray (design §7).
+ * An accepted pair gives its tier and scorePair's own reason. A refused pair
+ * lists the facts that differ, or "a different version" when none does — a
+ * remix, a live cut or a sequel that scorePair refuses on its tags.
+ */
+export function explainPair(spotify, youtube) {
+  const scored = scorePair(spotify, youtube)
+  if (scored) return `${scored.tier}: ${scored.reason.charAt(0).toLowerCase()}${scored.reason.slice(1)}`
+  const facts = []
+  const drift = Math.round(Math.abs((youtube?.durationMs ?? 0) - (spotify?.durationMs ?? 0)) / 1000)
+  if (!(spotify?.durationMs > 0) || !(youtube?.durationMs > 0)) facts.push('no length to compare')
+  else if (drift > STRONG_DRIFT_MS / 1000) facts.push(`lengths differ by ${drift}s`)
+  if (!sameTitle(spotify, youtube)) facts.push('different title')
+  if (!sharesAnArtist(spotify, youtube)) facts.push('no artist in common')
+  return `no match: ${facts.length > 0 ? facts.join(', ') : 'a different version'}`
+}
+
+/** The same title, exactly or once credits and decoration are set aside. */
+function sameTitle(spotify, youtube) {
+  if (foldTitle(spotify?.name) === foldTitle(youtube?.name)) return true
+  const essential = essentialTitle(youtube?.name, new Set(bylineNames(youtube)))
+  return essential !== '' && essential === essentialTitle(spotify?.name, new Set(spotifyNames(spotify)))
+}

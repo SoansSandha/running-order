@@ -86,5 +86,11 @@ export function createYouTubeClient({ baseUrl = DEFAULT_BASE_URL, fetch: fetchIm
       const body = await request(`/search?${params}`)
       return body?.results ?? []
     },
+
+    /** One video as a track, or null when YouTube has no such video. */
+    async track(videoId) {
+      const body = await request(`/track/${encodeURIComponent(videoId)}`)
+      return body?.track ?? null
+    },
   }
 }

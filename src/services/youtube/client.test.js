@@ -55,6 +55,16 @@ describe('createYouTubeClient', () => {
     expect(await clientWith(vi.fn(async () => ok({}))).search('x', 'videos', 3)).toEqual([])
   })
 
+  test('looks up one video by id', async () => {
+    const fetchImpl = vi.fn(async () => ok({ track: { videoId: 'q7e348rz27I' } }))
+    expect(await clientWith(fetchImpl).track('q7e348rz27I')).toEqual({ videoId: 'q7e348rz27I' })
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://127.0.0.1:8787/track/q7e348rz27I')
+  })
+
+  test('a video YouTube does not have is null', async () => {
+    expect(await clientWith(vi.fn(async () => ok({ track: null }))).track('aaaaaaaaaaa')).toBeNull()
+  })
+
   test('throws ProxyUnavailableError when the proxy cannot be reached', async () => {
     const client = clientWith(vi.fn(async () => { throw new TypeError('fetch failed') }))
     await expect(client.listPlaylists()).rejects.toBeInstanceOf(ProxyUnavailableError)

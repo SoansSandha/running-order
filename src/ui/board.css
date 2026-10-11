@@ -128,7 +128,7 @@
   /* Access gets its own track. Sharing Tracks' width meant a "CLONE ONLY"
      chip plus the count needed ~125px in an 11ch column, and because the
      cell is justify-content: flex-end the excess spilled LEFT, over Owner. */
-  --cols: 64px minmax(0, 1fr) 14ch 7ch 13ch;
+  --cols: 64px minmax(0, 1fr) 14ch 7ch 15ch;
   --row-h: 58px;
 }
 
@@ -1121,7 +1121,7 @@
 /* Spotify | YouTube | length | why | actions. Declared once per breakpoint
    (the Single Grid Declaration Rule). */
 .board-review {
-  --cols: minmax(0, 1fr) minmax(0, 1fr) 9ch minmax(0, 0.8fr) 24ch;
+  --cols: minmax(0, 1fr) minmax(0, 1fr) 9ch minmax(0, 0.8fr) 37ch;
   /* Tall enough for a found track's third line, "Not in your … playlist". */
   --row-h: 58px;
 }
@@ -1172,9 +1172,10 @@
 
 @media (max-width: 680px) {
   .board-review {
-    --cols: minmax(0, 1fr) minmax(0, 1fr) 7ch 20ch;
+    --cols: minmax(0, 1fr) minmax(0, 1fr) 15ch;
   }
 
+  .board-review .col-length,
   .board-review .col-why {
     display: none;
   }

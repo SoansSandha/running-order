@@ -62,3 +62,14 @@ export function formatDelta(ms) {
   if (seconds === 0) return '0s'
   return `${seconds > 0 ? '+' : '−'}${Math.abs(seconds)}s`
 }
+
+/**
+ * Where ↗ Open sends a track: its page in its own service. None for a local
+ * file, which has no page.
+ */
+export function openHref(track) {
+  if (!track?.id) return null
+  return track.source === 'youtube'
+    ? `https://music.youtube.com/watch?v=${track.id}`
+    : `https://open.spotify.com/track/${track.id}`
+}

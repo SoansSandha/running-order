@@ -23,3 +23,11 @@ export async function searchTracks(client, query, limit = SEARCH_LIMIT) {
     .filter(Boolean)
     .map((raw, index) => normalizePlaylistItem({ track: raw }, index))
 }
+
+/**
+ * One track by id, for pairing by a pasted link. A development-mode app may
+ * still read one track; only the batch endpoint went in February 2026.
+ */
+export async function getTrack(client, id) {
+  return normalizePlaylistItem({ track: await client.get(`/tracks/${encodeURIComponent(id)}`) }, 0)
+}

@@ -1,0 +1,190 @@
+/* ---- Match tray (docs/2026-10-10-match-tray-design.md) ---------------- */
+
+/* Opens under its row, across the board's full width. */
+.tray {
+  display: grid;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  border-top: 2px solid var(--rule);
+  border-bottom: 2px solid var(--rule);
+  background: var(--board-deep);
+}
+
+.tray-players {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px clamp(10px, 1.4vw, 18px);
+  border-right: 1px solid var(--rule-soft);
+}
+
+/* The services' own players, seated in a well. */
+.tray-player {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--rule);
+  background: var(--seam);
+}
+
+.tray-player-spotify {
+  height: 80px;
+}
+
+/* YouTube's embedded player must be at least 200×200px. */
+.tray-player-youtube {
+  aspect-ratio: 16 / 9;
+  min-height: 200px;
+}
+
+.tray-player.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  color: var(--flap-faint);
+  font-size: var(--fs-sub);
+  text-align: center;
+}
+
+.tray-work {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px clamp(10px, 1.4vw, 18px);
+}
+
+.tray-field {
+  display: flex;
+  gap: 8px;
+}
+
+.tray-field .field {
+  flex: 1;
+  min-width: 0;
+}
+
+.tray-error {
+  color: var(--red);
+}
+
+.tray-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tray-pair .tray-actions {
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
+/* A link that opens the other service is board furniture too: a quiet lever. */
+a.lever-quiet {
+  display: inline-block;
+  text-decoration: none;
+}
+
+/* D36: one grid per list. Its rows lie on it as subgrid, so every row's
+   columns line up and the action column is as wide as its widest buttons. */
+.tray-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  border: 1px solid var(--rule);
+}
+
+.tray-list-title {
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.tray-cand {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  background: linear-gradient(180deg, var(--board-lit) 0 50%, var(--board) 50% 100%);
+  border-bottom: 1px solid var(--seam);
+}
+
+.tray-cand:last-child {
+  border-bottom: 0;
+}
+
+.tray-cand > * {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 7px 10px;
+}
+
+.tray-cand > * + * {
+  border-left: 1px solid var(--rule-soft);
+}
+
+.tray-cand > .tray-actions {
+  flex-direction: row;
+}
+
+/* The verdict is a sentence, and the reason to read the row: it wraps rather
+   than being cut off. */
+.tray-verdict {
+  white-space: normal;
+}
+
+.tray-head,
+.tray-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Confirm, Reject and Undo sit on the row, and in the tray only on a phone (D35). */
+.row-decide {
+  display: contents;
+}
+
+.tray-decide {
+  display: none;
+}
+
+@media (max-width: 680px) {
+  .tray {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tray-players {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  /* The box keeps the full width; its lever drops beneath it. */
+  .tray-field {
+    flex-wrap: wrap;
+  }
+
+  .tray-field .field {
+    flex-basis: 100%;
+  }
+
+  .tray-list {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .tray-cand > .tray-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    border-left: 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .row-decide {
+    display: none;
+  }
+
+  .tray-decide {
+    display: flex;
+    gap: 6px;
+  }
+}

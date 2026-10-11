@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app as proxy
+from ytmusicapi.exceptions import YTMusicServerError
 
 
 @pytest.fixture
@@ -128,6 +129,9 @@ class RaisingYT:
     def search(self, query, filter=None, limit=20):
         raise RuntimeError(self._message)
 
+    def get_watch_playlist(self, videoId=None, limit=25):
+        raise RuntimeError(self._message)
+
 
 def test_post_auth_status_true_when_the_probe_succeeds(client, monkeypatch):
     fake = FakeYT(playlist={"id": "LM", "tracks": []})
@@ -240,6 +244,60 @@ def test_search_refuses_an_unknown_filter(client, monkeypatch):
 def test_search_failure_is_clean_and_drops_the_cached_client(client, monkeypatch):
     monkeypatch.setattr(proxy, "_client", RaisingYT())
     response = client.get("/search", params={"q": "x"})
+    assert response.status_code == 502
+    assert "leaky detail" not in response.text
+    assert proxy._client is None
+
+
+class WatchYT:
+    def __init__(self, tracks=None, raises=None):
+        self._tracks = tracks or []
+        self._raises = raises
+        self.calls = []
+
+    def get_watch_playlist(self, videoId=None, limit=25):
+        self.calls.append({"videoId": videoId, "limit": limit})
+        if self._raises:
+            raise self._raises
+        return {"tracks": self._tracks}
+
+
+# Fields verbatim from get_watch_playlist on AJA's official video, 2026-10-10.
+AJA = {
+    "videoId": "q7e348rz27I",
+    "title": "AJA - Kaléra (Feat. Jaski)",
+    "artists": [{"name": "Kaléra", "id": "UCuQZ7xv7in6zanA6QaZ0MGg"}],
+    "album": None,
+    "length": "2:16",
+    "videoType": "MUSIC_VIDEO_TYPE_OMV",
+}
+
+
+def test_track_passes_the_video_through(client, monkeypatch):
+    fake = WatchYT(tracks=[AJA, {"videoId": "next0000000", "title": "Up next"}])
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert client.get("/track/q7e348rz27I").json() == {"track": AJA}
+    assert fake.calls == [{"videoId": "q7e348rz27I", "limit": 1}]
+
+
+def test_a_missing_video_is_no_track(client, monkeypatch):
+    # Measured: YouTube answers an unknown id with a server error, not an empty list.
+    fake = WatchYT(raises=YTMusicServerError("No content returned by the server."))
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.get("/track/aaaaaaaaaaa")
+    assert response.status_code == 200
+    assert response.json() == {"track": None}
+
+
+def test_a_queue_that_starts_elsewhere_is_no_track(client, monkeypatch):
+    fake = WatchYT(tracks=[{"videoId": "someoneelse", "title": "Something else"}])
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert client.get("/track/q7e348rz27I").json() == {"track": None}
+
+
+def test_track_failure_is_clean_and_drops_the_cached_client(client, monkeypatch):
+    monkeypatch.setattr(proxy, "_client", RaisingYT())
+    response = client.get("/track/q7e348rz27I")
     assert response.status_code == 502
     assert "leaky detail" not in response.text
     assert proxy._client is None

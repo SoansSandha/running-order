@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from ytmusicapi import YTMusic
+from ytmusicapi.exceptions import YTMusicServerError
 
 VITE_ORIGIN = "http://127.0.0.1:5173"
 
@@ -170,3 +171,24 @@ def search(q: str, filter: str = "songs", limit: int = Query(5, ge=1, le=20)) ->
         # Never interpolate the exception's own string (see get_playlist).
         raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
     return {"results": results[:limit]}
+
+
+@app.get("/track/{video_id}")
+def get_track(video_id: str) -> dict:
+    """One video as a track, for pairing by a pasted link (match tray design §5).
+
+    The first track of the video's watch playlist carries the fields a search
+    result does: title, artists, album, length and videoType. YouTube answers
+    a video that does not exist, or is private, with a server error rather
+    than an empty list, so that error reads as no track.
+    """
+    try:
+        tracks = get_client().get_watch_playlist(videoId=video_id, limit=1).get("tracks") or []
+    except YTMusicServerError:
+        return {"track": None}
+    except Exception:
+        reset_client()
+        # Never interpolate the exception's own string (see get_playlist).
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
+    first = tracks[0] if tracks else None
+    return {"track": first if first and first.get("videoId") == video_id else None}
