@@ -83,10 +83,13 @@ Continuing the numbering in the earlier designs.
   - **↗ Open** opens it in Spotify or YouTube Music, in a new tab.
   - **Pair** records `same`, with a snapshot when the candidate is a find (D29),
     exactly as a Pair with… pick did.
-- **A pair's tray** shows "The matcher says: …" for the pair, **↗ Open** for each
-  side, and "Not this one? Pick another": the same search, link field and
-  candidates for the Spotify song. Picking another replaces the proposal.
-  Confirm and Reject stay on the row.
+- **A pair's tray** shows "The matcher says: …" for the pair and **↗ Open** for
+  each side.
+  - **A proposal (Likely, Strong)** adds "Not this one? Pick another": the same
+    search, link field and candidates for its playlist-side song. Picking
+    another replaces the proposal. Confirm and Reject stay on the row.
+  - **A settled pair's tray** only listens. To pick another, Undo it, then use
+    **Find a match**.
 - **The row's own Play link** becomes **↗ Open**, on every row.
 - **During a sweep** (catalogue search §8), listening and the owner's own search
   still work. **Pair**, **Confirm**, **Reject** and **Undo** wait until the sweep
@@ -143,12 +146,16 @@ Continuing the numbering in the earlier designs.
   - **Spotify:** `GET /v1/tracks/{id}`, still available to a development-mode
     app; only the batch endpoint was removed in February 2026. It is normalized
     as a playlist row is.
-  - **YouTube:** a new read-only proxy route, `GET /track/{videoId}`. It returns
-    the first track of `get_watch_playlist(videoId, limit=1)`, the same fields a
-    search result has, with its `length` also given as `duration_seconds`.
-    Measured on 2026-10-08: unauthenticated, it returns the title, artist list,
-    album, `length` and `videoType` for both an album track and an official
-    video.
+  - **YouTube:** a new read-only proxy route, `GET /track/{videoId}`. It
+    returns `{ track }`: the first track of `get_watch_playlist(videoId,
+    limit=1)`, the same fields a search result has, passed through.
+    - Measured on 2026-10-08 and 2026-10-10: unauthenticated, it returns the
+      title, artist list, album, `length` (as text, e.g. `2:16`) and
+      `videoType` for both an album track and an official video.
+    - The app reads `length` itself.
+    - YouTube answers an id it does not have with a server error, so the
+      route answers `{ track: null }` for that error, and for a queue that
+      starts with another video.
 - **Pair** looks the link up, then records `same` at once, with a snapshot when
   the track is in neither playlist (D29, D34). The tray closes, and the settled
   row shows the matcher's verdict.
@@ -186,14 +193,19 @@ Continuing the numbering in the earlier designs.
   "strong: title and artist match exactly", "likely: the durations differ by 3s".
 - **A refused pair** shows "no match:", then the facts that differ, in this
   order:
-  - the length difference, if over 2s ("67s longer", "12s shorter");
-  - "different title", when the folded titles differ;
+  - "lengths differ by 67s", when the lengths are more than 2s apart, or "no
+    length to compare" when a side has none. It names no side as longer, so
+    it reads the same from either side's tray;
+  - "different title", when the titles differ even once credits and
+    decoration are set aside;
   - "no artist in common", when no artist is shared.
-  For example: "no match: 67s longer, no artist in common".
-- **A settled row's reason:**
-  - **Confirmed:** "You confirmed this · the matcher says: <verdict>".
-  - **Paired from a link:** "You paired this · the matcher says: <verdict>".
-  - Either way, a pair the matcher would have refused is visible at a glance.
+
+  For example: "no match: lengths differ by 67s, different title, no artist
+  in common". When none of these differs, it reads "no match: a different
+  version".
+- **A settled row's reason** is "You confirmed this · the matcher says:
+  <verdict>", whether the pair was confirmed, picked or pasted as a link. A
+  pair the matcher would have refused is visible at a glance.
 
 ---
 
@@ -215,20 +227,25 @@ Continuing the numbering in the earlier designs.
 | Piece | What it does | Tested by |
 |---|---|---|
 | `parseTrackLink(text)` in `src/match/links.js` | §5's link reading | Unit tests: every accepted form, both services, and the rejects |
-| `explainPair(spotify, youtube)` in `src/match/scorePair.js` | §7's words for any pair, accepted or refused | Unit tests on real pairs from the probe |
-| `rankResults(song, results, side, { inOtherPlaylist })` in `src/match/findTwin.js` | §4's ordering, with each result's verdict and its "already in your playlist" mark | Unit tests |
-| Proxy `GET /track/{videoId}` | §5's YouTube lookup, read-only, as thin as `/search` | pytest: passes the track through, adds `duration_seconds`, 404 when YouTube has nothing, never leaks exception text |
-| `youtube.track(videoId)` | The client call for that route | Unit test |
+| Proxy `GET /track/{videoId}` | §5's YouTube lookup, read-only, as thin as `/search` | pytest: passes the track through, `{ track: null }` for a missing video or another video's queue, a clean 502 otherwise, never leaks exception text |
+| `youtube.track(videoId)`; reading a `length` like `2:16` in the YouTube normalizer | The client call for that route, and the length a watch-playlist track gives only as text | Unit tests |
 | `getTrack(client, id)` in `src/services/spotify/search.js` | §5's Spotify lookup | Unit test |
-| Settled reasons | §7's settled-row text, built where `certain()` builds the pair | Unit tests in `settleFound` and `pairTracks` |
-| `MatchTray` in `src/ui/screens/MatchTray.jsx` | The tray (§3) | The walkthrough |
-| `review.css` | The tray's styles and the review board's phone grid. Every list in the tray is one grid with subgrid rows (D36) | The layout check |
+| `explainPair(spotify, youtube)` in `src/match/scorePair.js` | §7's words for any pair, accepted or refused | Unit tests |
+| `rankResults(song, results, { side, inOtherPlaylist })` in `src/match/findTwin.js` | §4's ordering, with each result's verdict and its "already in your playlist" mark | Unit tests on real pairs |
+| `searchCatalogue` and `lookupLink` in `src/services/trackLookups.js` | §4's own search and §5's link lookup, with its one-line errors | Unit tests with fake clients |
+| `openHref(track)` in `src/ui/format.js` | Where **↗ Open** goes | Unit tests |
+| `MatchTray` in `src/ui/screens/MatchTray.jsx` | The tray (§3) | The layout check and the walkthrough |
+| The review screen | Opens one tray at a time; a settled row's reason (§7) is built from `explainPair` | The layout check and the walkthrough |
+| `src/ui/review.css` | The tray's styles. Every list in the tray is one grid with subgrid rows (D36). The review board's own grid stays in `board.css`, declared once per breakpoint | The layout check |
 
-- **The hook gains:**
-  - which row's tray is open;
-  - a `pairByLink(song, link)` that resolves the link and records the pair;
-  - a `searchFor(song, text)` that runs the owner's own search.
-- **Unchanged:** `settlePairs`, `findOnYouTube` and `findOnSpotify`.
+- **Which tray is open** is the review screen's own state.
+- **The tray runs its search and its link lookup itself,** through
+  `trackLookups.js`, and hands the chosen track back. The review records the
+  decision with the existing `decide`.
+- **The hook only adds** the playlists' id sets, so the tray can mark a result
+  already in the other playlist.
+- **Unchanged:** `settlePairs`, `settleFound`, `findOnYouTube` and
+  `findOnSpotify`.
 
 ---
 
@@ -241,6 +258,11 @@ Continuing the numbering in the earlier designs.
   artists through a mocked proxy. It reports any element that extends past its
   column. It must report nothing.
   - It is the check that found the overlap fixed in `ca0969f`.
+  - Run against this design's tray, it found two action columns too narrow
+    for their buttons:
+    - the review row's Listen, Confirm and Reject need 37ch;
+    - the Playlists board's "Clone only" chip needs 15ch. That one spills on
+      today's board too.
   - It uses no private data, and adds no dependency: `playwright-cli` is
     already installed on the machine.
 - **The walkthrough,** on "test punjabi songs" (test profiles), is the gate for
