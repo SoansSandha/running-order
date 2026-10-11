@@ -40,3 +40,7 @@ proxy/.pytest_cache/
 
 # The owner's own library data — never commit it.
 .local/
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+# Agent tooling scratch (plans, mockups)
+.superpowers/
