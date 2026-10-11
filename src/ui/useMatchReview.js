@@ -16,6 +16,7 @@ import {
   forgetDecision,
   loadMatchBook,
   recordDecision,
+  replaceProposal,
   saveMatchBook,
   spotifyKeyOf,
   verdictLookup,
@@ -270,6 +271,25 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     [book, commit, recentlyDecided, findOf],
   )
 
+  // Match tray §3: picking another replaces a proposal. One save for both
+  // decisions; a second decide would fall to the 400ms guard and start from
+  // the same stale book.
+  const pickAnother = useCallback(
+    (pair, spotifyTrack, youtubeTrack) => {
+      if (recentlyDecided()) return
+      const spotifyKey = spotifyKeyOf(spotifyTrack)
+      if (spotifyKey == null || youtubeTrack?.id == null) return // M-3
+      commit(
+        replaceProposal(
+          book,
+          { spotifyKey: spotifyKeyOf(pair.spotify), youtubeVideoId: pair.youtube?.id },
+          { spotifyKey, youtubeVideoId: youtubeTrack.id, found: findOf(spotifyTrack, youtubeTrack) },
+        ),
+      )
+    },
+    [book, commit, recentlyDecided, findOf],
+  )
+
   const undo = useCallback(
     (pair) => {
       if (recentlyDecided()) return
@@ -292,6 +312,7 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     remembered,
     decide,
     confirmAll,
+    pickAnother,
     undo,
     found,
     sweep,

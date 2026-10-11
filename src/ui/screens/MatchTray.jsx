@@ -8,7 +8,7 @@
  * hands the chosen track back to the review, which records the decision.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { rankResults } from '../../match/findTwin.js'
 import { explainPair, queryTitle } from '../../match/scorePair.js'
 import { lookupLink, searchCatalogue } from '../../services/trackLookups.js'
@@ -27,7 +27,7 @@ const NAMES = { youtube: 'YouTube Music', spotify: 'Spotify' }
  * @param {Array} props.leftovers the other playlist's unmatched songs, closest title first
  * @param {(track: object) => boolean} props.inOtherPlaylist
  * @param {{youtube: object, spotify: object}} props.clients
- * @param {boolean} props.deciding false while a sweep runs, when no decision may be made
+ * @param {boolean} props.deciding true while a sweep runs, when no decision may be made
  * @param {(track: object) => void} props.onPair
  * @param {(verdict: 'same'|'different') => void} props.onDecide
  * @param {() => void} props.onUndo
@@ -56,6 +56,21 @@ export function MatchTray({
   const [link, setLink] = useState('')
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState(null)
+  const [linkWaits, setLinkWaits] = useState(false)
+  // I-1: a link lookup outlives the render that started it, so it pairs with
+  // the latest onPair, which builds on decisions made meanwhile, and only
+  // while the tray is still open.
+  const latest = useRef({ onPair, deciding })
+  const open = useRef(true)
+  useEffect(() => {
+    latest.current = { onPair, deciding }
+  })
+  useEffect(() => {
+    open.current = true
+    return () => {
+      open.current = false
+    }
+  }, [])
   // The song's own side plays it; the other side plays the pair's track, or
   // whichever result was last listened to. YouTube autoplays only after Listen.
   const [loaded, setLoaded] = useState(() => ({
@@ -85,10 +100,13 @@ export function MatchTray({
     event.preventDefault()
     setLinking(true)
     setLinkError(null)
+    setLinkWaits(false)
     const { track, error } = await lookupLink(link, side, clients)
+    if (!open.current) return
     setLinking(false)
     if (error) setLinkError(error)
-    else onPair(track)
+    else if (latest.current.deciding) setLinkWaits(true)
+    else if (track) latest.current.onPair(track)
   }
 
   const results = rankResults(song, manual ?? sweepResults, { side, inOtherPlaylist })
@@ -97,7 +115,8 @@ export function MatchTray({
     verdict: side === 'youtube' ? explainPair(song, track) : explainPair(track, song),
     already: false,
   }))
-  const list = { playingId: loaded[side]?.id, onListen: listen, onPair, deciding, other }
+  // A candidate's Pair waits for a link being looked up, so the two never race.
+  const list = { playingId: loaded[side]?.id, onListen: listen, onPair, deciding: deciding || linking, other }
 
   return (
     <div className="tray" role="region" aria-label={`Match ${titleOf(song)}`}>
@@ -171,7 +190,14 @@ export function MatchTray({
                 {linkError}
               </p>
             ) : null}
-            <CandidateList title="Search results" rows={results} {...list} />
+            {linkWaits && deciding ? (
+              <p className="row-sub">Deciding waits until the search ends or is stopped.</p>
+            ) : null}
+            {manual?.length === 0 ? (
+              <p className="row-sub">Nothing found on {other}.</p>
+            ) : (
+              <CandidateList title="Search results" rows={results} {...list} />
+            )}
             <CandidateList title={`In your ${other} playlist`} rows={leftoverRows} {...list} />
           </>
         )}

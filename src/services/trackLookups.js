@@ -50,6 +50,6 @@ export async function lookupLink(text, side, { youtube, spotify }) {
     return track ? { track } : { error: NOT_FOUND }
   } catch (failure) {
     // Spotify answers an unknown or malformed id with 404 or 400.
-    return { error: failure?.status === 404 || failure?.status === 400 ? NOT_FOUND : failure.message }
+    return { error: failure?.status === 404 || failure?.status === 400 ? NOT_FOUND : failure?.message ?? 'Could not look that link up.' }
   }
 }

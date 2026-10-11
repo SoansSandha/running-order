@@ -56,8 +56,10 @@ export function ReviewScreen({ app }) {
         clients={clients}
         deciding={deciding}
         onPair={(chosen) => {
-          if (onYoutube) review.decide(chosen, song, 'same')
-          else review.decide(song, chosen, 'same')
+          const [spotifyTrack, youtubeTrack] = onYoutube ? [chosen, song] : [song, chosen]
+          // §3: a pick in a proposal's tray replaces the proposal.
+          if (extra.pair) review.pickAnother(extra.pair, spotifyTrack, youtubeTrack)
+          else review.decide(spotifyTrack, youtubeTrack, 'same')
           close()
         }}
         onClose={close}

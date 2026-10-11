@@ -53,6 +53,17 @@ export function recordDecision(book, { spotifyKey, youtubeVideoId, verdict, foun
 }
 
 /**
+ * The book once the owner picks another track for a proposal (match tray
+ * design §3): `different` for the proposal, then `same` for the pick. A pick
+ * in neither playlist leaves settlePairs claiming the proposal unless it is
+ * rejected. A pick of the proposal's own track overwrites the `different`.
+ */
+export function replaceProposal(book, proposal, pick, decidedAt = Date.now()) {
+  const rejected = recordDecision(book, { ...proposal, verdict: 'different' }, decidedAt)
+  return recordDecision(rejected, { ...pick, verdict: 'same' }, decidedAt)
+}
+
+/**
  * What a confirmed find keeps of the found track. The track is in neither
  * playlist, so after a reload nothing else knows it (catalogue search design
  * §7). `uri` is what a Plan C add to Spotify needs.

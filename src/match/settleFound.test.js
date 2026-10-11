@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { recordDecision, snapshotOf } from './matchBook.js'
+import { recordDecision, replaceProposal, snapshotOf, verdictLookup } from './matchBook.js'
+import { scoreCandidates, settlePairs } from './pairTracks.js'
 import { settleFound } from './settleFound.js'
 
 const sp = (id, name, durationMs) => ({
@@ -203,5 +204,35 @@ describe('settleFound', () => {
     )
     expect(result.pairs).toEqual([playlistPair])
     expect(result.pairs[0]).toBe(playlistPair)
+  })
+})
+
+describe('picking another for a proposal (match tray §3)', () => {
+  const song = sp('s1', 'Antidote', 188000)
+  const proposed = yt('y1', 'Antidote', 191000)
+  const pick = yt('y2', 'Antidote', 188000)
+  // The review's own pipeline: settlePairs, then settleFound.
+  const review = (book) =>
+    settleFound(
+      settlePairs([song], [proposed], scoreCandidates([song], [proposed]), { verdictFor: verdictLookup(book) }),
+      { spotifyTracks: [song], youtubeTracks: [proposed], book },
+    )
+  const proposal = { spotifyKey: 's1', youtubeVideoId: 'y1' }
+
+  test('a pick in neither playlist replaces the proposal', () => {
+    const picked = { spotifyKey: 's1', youtubeVideoId: 'y2', found: snapshotOf(pick, 'youtube') }
+    // C-1: a `same` for the pick alone leaves the proposal standing.
+    expect(summary(review(recordDecision([], { ...picked, verdict: 'same' }, 1)))).toEqual([
+      ['s1', 'y1', 'likely', undefined],
+    ])
+    const result = review(replaceProposal([], proposal, picked, 1))
+    expect(summary(result)).toEqual([['s1', 'y2', 'certain', 'youtube']])
+    expect(result.unmatchedYoutube).toEqual([proposed])
+  })
+
+  test("picking the proposal's own track confirms it", () => {
+    const book = replaceProposal([], proposal, proposal, 1)
+    expect(book).toEqual([{ spotifyKey: 's1', youtubeVideoId: 'y1', verdict: 'same', decidedAt: 1 }])
+    expect(summary(review(book))).toEqual([['s1', 'y1', 'certain', undefined]])
   })
 })
