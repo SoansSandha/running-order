@@ -31,6 +31,7 @@ const NAMES = { youtube: 'YouTube Music', spotify: 'Spotify' }
  * @param {(track: object) => void} props.onPair
  * @param {(verdict: 'same'|'different') => void} props.onDecide
  * @param {() => void} props.onUndo
+ * @param {() => void} [props.onNoMatch] marks the song as not on `side`'s service (no-match D39); the lever shows only when given
  * @param {() => void} props.onClose
  */
 export function MatchTray({
@@ -46,6 +47,7 @@ export function MatchTray({
   onPair,
   onDecide,
   onUndo,
+  onNoMatch,
   onClose,
 }) {
   const other = NAMES[side]
@@ -128,6 +130,14 @@ export function MatchTray({
       </div>
 
       <div className="tray-work">
+        {/* At the top, so marking needs no scroll past the candidates. */}
+        {onNoMatch ? (
+          <div className="tray-head">
+            <QuietLever className="lever-quiet is-compact" onClick={onNoMatch} disabled={deciding}>
+              Not on {other}
+            </QuietLever>
+          </div>
+        ) : null}
         {pair ? (
           <div className="tray-pair">
             <p className="row-sub">The matcher says: {explainPair(pair.spotify, pair.youtube)}</p>

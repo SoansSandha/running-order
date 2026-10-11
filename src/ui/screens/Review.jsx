@@ -41,6 +41,9 @@ export function ReviewScreen({ app }) {
   /** Everything the tray needs to match one playlist song. */
   const trayFor = (song, side, extra = {}) => {
     const onYoutube = side === 'spotify'
+    // No-match D39: an unmatched song or a proposed find can be marked as not
+    // on the other service; a pair from the two playlists or a settled one cannot.
+    const markable = !extra.pair || (extra.pair.missingFrom != null && !extra.settled)
     return (
       <MatchTray
         song={song}
@@ -62,6 +65,14 @@ export function ReviewScreen({ app }) {
           else review.decide(spotifyTrack, youtubeTrack, 'same')
           close()
         }}
+        onNoMatch={
+          markable
+            ? () => {
+                review.markNoMatch(song)
+                close()
+              }
+            : undefined
+        }
         onClose={close}
         {...extra}
       />
@@ -226,14 +237,9 @@ export function ReviewScreen({ app }) {
             {result.unmatchedSpotify.map((track) => {
               const key = `o${track.originalIndex}`
               return (
-                <UnmatchedBlock
-                  key={key}
-                  track={track}
-                  side="spotify"
-                  open={openKey === key}
-                  onToggle={() => toggle(key)}
-                  tray={() => trayFor(track, 'youtube')}
-                />
+                <UnmatchedBlock key={key} track={track} side="spotify" open={openKey === key} tray={() => trayFor(track, 'youtube')}>
+                  <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Find a match" />
+                </UnmatchedBlock>
               )
             })}
 
@@ -241,14 +247,9 @@ export function ReviewScreen({ app }) {
             {result.unmatchedYoutube.map((track) => {
               const key = `y${track.originalIndex}`
               return (
-                <UnmatchedBlock
-                  key={key}
-                  track={track}
-                  side="youtube"
-                  open={openKey === key}
-                  onToggle={() => toggle(key)}
-                  tray={() => trayFor(track, 'spotify')}
-                />
+                <UnmatchedBlock key={key} track={track} side="youtube" open={openKey === key} tray={() => trayFor(track, 'spotify')}>
+                  <TrayToggle open={openKey === key} onClick={() => toggle(key)} label="Find a match" />
+                </UnmatchedBlock>
               )
             })}
 
@@ -269,6 +270,28 @@ export function ReviewScreen({ app }) {
                   </PairBlock>
                 )
               })}
+            </details>
+
+            {/* No-match D40: marked songs are settled, and Undo is their one lever. */}
+            <details className="review-settled review-marked">
+              <summary className="review-group col-label">
+                Not on the other service (
+                <span className="num">{formatCount(result.markedSpotify.length + result.markedYoutube.length)}</span>)
+              </summary>
+              {result.markedSpotify.map((track) => (
+                <UnmatchedBlock key={`ms${track.originalIndex}`} track={track} side="spotify" note="Not on YouTube Music" marked>
+                  <QuietLever className="lever-quiet is-compact" onClick={() => review.unmark(track)} disabled={deciding}>
+                    Undo
+                  </QuietLever>
+                </UnmatchedBlock>
+              ))}
+              {result.markedYoutube.map((track) => (
+                <UnmatchedBlock key={`my${track.originalIndex}`} track={track} side="youtube" note="Not on Spotify" marked>
+                  <QuietLever className="lever-quiet is-compact" onClick={() => review.unmark(track)} disabled={deciding}>
+                    Undo
+                  </QuietLever>
+                </UnmatchedBlock>
+              ))}
             </details>
 
             <UnlitField />
@@ -371,23 +394,29 @@ function PairBlock({ pair, state, open, tray, children }) {
   )
 }
 
-/** An unmatched song, its Find a match lever, and its tray beneath it when open. */
-function UnmatchedBlock({ track, side, open, onToggle, tray }) {
+/**
+ * An unmatched song: itself in its own column, a note in the other, its
+ * levers, and its tray beneath it when open. A song marked as not on the
+ * other service is settled (no-match D40): it says so in Why and has no tray.
+ */
+function UnmatchedBlock({ track, side, note = 'No match yet', marked = false, open = false, tray, children }) {
   const own = <TrackCell track={track} />
   const none = (
     <span className="row-sub" role="cell">
-      No match yet
+      {note}
     </span>
   )
   return (
     <>
-      <div className="board-row" role="row">
+      <div className="board-row" role="row" data-written={marked ? 'true' : undefined}>
         {side === 'spotify' ? own : none}
         {side === 'spotify' ? none : own}
         <span role="cell" className="col-length" />
-        <span role="cell" className="col-why" />
+        <span className="row-sub col-why" role="cell">
+          {marked ? 'You marked this' : null}
+        </span>
         <span className="cell-end review-levers" role="cell">
-          <TrayToggle open={open} onClick={onToggle} label="Find a match" />
+          {children}
         </span>
       </div>
       {open ? tray() : null}

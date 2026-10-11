@@ -3,6 +3,7 @@ import {
   findSnapshotFor,
   forgetDecision,
   loadMatchBook,
+  markKeysOf,
   recordDecision,
   saveMatchBook,
   snapshotOf,
@@ -236,5 +237,46 @@ describe('a confirmed find', () => {
       spotifyKeys: new Set([spotifyTrack.id]),
     })
     expect(snapshot).toBeUndefined()
+  })
+})
+
+describe('a no-match mark (no-match design §3)', () => {
+  const spotifyMark = { spotifyKey: 's1', youtubeVideoId: null, verdict: 'none', decidedAt: 1 }
+  const youtubeMark = { spotifyKey: null, youtubeVideoId: 'y1', verdict: 'none', decidedAt: 1 }
+
+  test('a mark on either side loads back unchanged', () => {
+    const storage = memoryStorage()
+    saveMatchBook([spotifyMark, youtubeMark], storage)
+    expect(loadMatchBook(storage)).toEqual([spotifyMark, youtubeMark])
+  })
+
+  test.each([
+    ['both sides', { spotifyKey: 's1', youtubeVideoId: 'y1', verdict: 'none' }],
+    ['neither side', { spotifyKey: null, youtubeVideoId: null, verdict: 'none' }],
+    ['a missing side rather than null', { spotifyKey: 's1', verdict: 'none' }],
+    ['a pair verdict with a side missing', { spotifyKey: 's1', youtubeVideoId: null, verdict: 'same' }],
+  ])('an entry with %s is dropped on load, and good ones kept', (_, entry) => {
+    const storage = memoryStorage()
+    storage.setItem('playlist-sorter:match-book', JSON.stringify([entry, spotifyMark]))
+    expect(loadMatchBook(storage)).toEqual([spotifyMark])
+  })
+
+  test('marking a song again replaces its mark, and forgetting it removes only that mark', () => {
+    const book = recordDecision([spotifyMark, youtubeMark], { spotifyKey: 's1', youtubeVideoId: null, verdict: 'none' }, 2)
+    expect(book).toEqual([youtubeMark, { ...spotifyMark, decidedAt: 2 }])
+    expect(forgetDecision(book, 's1', null)).toEqual([youtubeMark])
+  })
+
+  test('pairing never reads a mark as a verdict', () => {
+    expect(verdictLookup([spotifyMark])('s1', null)).toBeNull()
+  })
+
+  test.each([
+    [{ id: 's1', source: 'spotify' }, { spotifyKey: 's1', youtubeVideoId: null }],
+    [{ id: null, uri: LOCAL_URI, source: 'spotify' }, { spotifyKey: LOCAL_URI, youtubeVideoId: null }],
+    [{ id: 'y1', source: 'youtube' }, { spotifyKey: null, youtubeVideoId: 'y1' }],
+    [{ id: null, source: 'youtube' }, null],
+  ])('%o is marked under %o', (song, keys) => {
+    expect(markKeysOf(song)).toEqual(keys)
   })
 })

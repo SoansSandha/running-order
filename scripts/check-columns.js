@@ -81,7 +81,7 @@ async (page) => {
   const measure = () => {
     const found = []
     const rows = document.querySelectorAll(
-      '.board-row, .board-cols, .lever-row, .head, .tally, .peek-row, .tray-cand, .tray-field, .tray-pair .tray-actions, .tray-foot',
+      '.board-row, .board-cols, .lever-row, .head, .tally, .peek-row, .tray-cand, .tray-field, .tray-pair .tray-actions, .tray-head, .tray-foot',
     )
     for (const row of rows) {
       const rowBox = row.getBoundingClientRect()
@@ -124,11 +124,20 @@ async (page) => {
   for (const [name, path] of screens) {
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 })
-      // One settled pair, so the Settled group has a row to measure.
+      // One settled pair, so the Settled group has a row to measure, and one
+      // song marked on each side (a long YouTube title among them), so the
+      // "Not on the other service" group does too.
       await page.evaluate(
-        ([key]) =>
-          localStorage.setItem('playlist-sorter:match-book', JSON.stringify([{ spotifyKey: key, youtubeVideoId: 'strong00000', verdict: 'same', decidedAt: 1 }])),
-        [demo[0].id],
+        ([key, markedKey]) =>
+          localStorage.setItem(
+            'playlist-sorter:match-book',
+            JSON.stringify([
+              { spotifyKey: key, youtubeVideoId: 'strong00000', verdict: 'same', decidedAt: 1 },
+              { spotifyKey: markedKey, youtubeVideoId: null, verdict: 'none', decidedAt: 1 },
+              { spotifyKey: null, youtubeVideoId: 'longvid5000', verdict: 'none', decidedAt: 1 },
+            ]),
+          ),
+        [demo[0].id, demo[12].id],
       )
       await page.goto(`${BASE}${path}`)
       await page.evaluate(() => document.fonts.ready)
@@ -141,7 +150,11 @@ async (page) => {
       await page.waitForSelector('.board-review .board-row')
       await page.getByRole('button', { name: 'Search all unmatched' }).click()
       await page.waitForFunction(() => document.body.textContent.includes('Searched'), null, { timeout: 30000 })
-      await page.locator('.review-settled > summary').click()
+      // Open Settled and Not on the other service, so their rows are measured.
+      for (const summary of await page.locator('.review-settled > summary').all()) await summary.click()
+      const marked = await page.locator('.review-marked .board-row').count()
+      if (marked !== 2) throw new Error(`review@${width}: expected 2 marked rows, found ${marked}`)
+      if (!(await page.locator('.review-marked').evaluate((el) => el.open))) throw new Error(`review@${width}: the marked group did not open`)
       note(`review@${width}`, await page.evaluate(measure))
       for (const [label, button, pair, search] of [
         ['tray: only on Spotify', page.getByRole('button', { name: 'Find a match' }).first(), false, 'Search YouTube Music'],

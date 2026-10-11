@@ -134,6 +134,7 @@ a.lever-quiet {
   white-space: normal;
 }
 
+.tray-head,
 .tray-foot {
   display: flex;
   justify-content: flex-end;
