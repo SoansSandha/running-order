@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'vitest'
-import { makeTracks } from '../test/factory.js'
+import { makeTracks, makeYouTubeTracks } from '../test/factory.js'
 import {
   buildRestoreOrder,
+  clearMirrorRecord,
   clearSnapshot,
   createSnapshot,
+  loadMirrorRecord,
   loadSnapshot,
+  saveMirrorRecord,
   saveSnapshot,
+  startMirrorRecord,
 } from './undo.js'
 
 function memoryStorage() {
@@ -140,5 +144,73 @@ describe('snapshot storage', () => {
     const snapshot = createSnapshot({ id: 'p1', name: 'x', snapshotId: 's' }, playlist())
     expect(() => saveSnapshot(snapshot, hostile)).not.toThrow()
     expect(loadSnapshot('p1', hostile)).toBe(null)
+  })
+})
+
+describe('buildRestoreOrder by another key', () => {
+  test('restores a YouTube playlist by video id, with anything newer at the bottom', () => {
+    const tracks = makeYouTubeTracks([{ videoId: 'c' }, { videoId: 'a' }, { videoId: 'new' }, { videoId: 'b' }])
+    const restored = buildRestoreOrder(tracks, { uris: ['a', 'b', 'c'] }, (track) => track.id)
+    expect(restored.map((track) => track.id)).toEqual(['a', 'b', 'c', 'new'])
+  })
+})
+
+describe('the mirror undo record', () => {
+  const youtubeTracks = makeYouTubeTracks([{ videoId: 'y1' }, { videoId: 'y2' }])
+  const playlists = { youtubePlaylistId: 'yt', spotifyPlaylistId: 'sp', youtubeTracks }
+
+  test('starts from YouTube’s order now, with nothing added', () => {
+    expect(startMirrorRecord(null, playlists, 5)).toEqual({
+      version: 1,
+      youtubePlaylistId: 'yt',
+      spotifyPlaylistId: 'sp',
+      orderBefore: ['y1', 'y2'],
+      addedToYoutube: [],
+      addedToSpotify: [],
+      reordered: false,
+      finished: false,
+      createdAt: 5,
+    })
+  })
+
+  test('carries an unfinished record for the same playlists forward (D54)', () => {
+    const prior = { ...startMirrorRecord(null, playlists, 1), orderBefore: ['old'], addedToSpotify: ['spotify:track:x'] }
+    expect(startMirrorRecord(prior, playlists, 5)).toBe(prior)
+  })
+
+  test('starts afresh after a finished run', () => {
+    const prior = { ...startMirrorRecord(null, playlists, 1), orderBefore: ['old'], finished: true }
+    expect(startMirrorRecord(prior, playlists, 5).orderBefore).toEqual(['y1', 'y2'])
+  })
+
+  test('starts afresh for another Spotify playlist, so two are never mixed', () => {
+    const prior = { ...startMirrorRecord(null, playlists, 1), orderBefore: ['old'] }
+    expect(startMirrorRecord(prior, { ...playlists, spotifyPlaylistId: 'other' }, 5).orderBefore).toEqual(['y1', 'y2'])
+  })
+
+  test('round-trips through storage, filed under the YouTube playlist', () => {
+    const storage = memoryStorage()
+    const record = startMirrorRecord(null, playlists, 5)
+    expect(saveMirrorRecord(record, storage)).toBe(true)
+    expect(storage.store.has('playlist-sorter:mirror-undo:yt')).toBe(true)
+    expect(loadMirrorRecord('yt', storage)).toEqual(record)
+    clearMirrorRecord('yt', storage)
+    expect(loadMirrorRecord('yt', storage)).toBeNull()
+  })
+
+  test('a blocked store saves nothing, reads as no record, and never throws', () => {
+    const refuse = () => {
+      throw new Error('blocked')
+    }
+    const blocked = { getItem: refuse, setItem: refuse, removeItem: refuse }
+    expect(saveMirrorRecord(startMirrorRecord(null, playlists, 5), blocked)).toBe(false)
+    expect(loadMirrorRecord('yt', blocked)).toBeNull()
+    expect(() => clearMirrorRecord('yt', blocked)).not.toThrow()
+  })
+
+  test('a record of another version reads as no record', () => {
+    const storage = memoryStorage()
+    storage.setItem('playlist-sorter:mirror-undo:yt', JSON.stringify({ version: 99 }))
+    expect(loadMirrorRecord('yt', storage)).toBeNull()
   })
 })

@@ -62,6 +62,8 @@ export function useSorterApp(auth, route, navigate, demo = null) {
   const [run, setRun] = useState(demo?.run ?? null)
   const [outcome, setOutcome] = useState(demo?.outcome ?? null)
   const abort = useRef(null)
+  /** A mirror run is writing from the review (mirror run design §7). */
+  const [mirrorBusy, setMirrorBusy] = useState(false)
 
   /**
    * Which library is being browsed: the path's source on a playlist route,
@@ -285,6 +287,29 @@ export function useSorterApp(auth, route, navigate, demo = null) {
     },
     [navigate, loadPlaylist],
   )
+
+  /**
+   * Re-read the open Spotify playlist where it stands, after the mirror run
+   * wrote to it (mirror run design §5). Unlike loadPlaylist it shows no
+   * stand-in and clears nothing, so the review stays up while it reads; the
+   * fresh snapshot id keeps Sort's own write guard from tripping.
+   */
+  const refreshPlaylist = useCallback(async () => {
+    if (demoRef.current || !playlist || (playlist.source ?? 'spotify') !== 'spotify') return
+    // Shares loadPlaylist's ticket: a refresh landing after another playlist
+    // was opened must not overwrite it.
+    const ticket = ++loadTicket.current
+    const latest = () => ticket === loadTicket.current
+    const profile = me ?? (await getCurrentUser(client))
+    if (!latest()) return
+    const [row, loaded] = await Promise.all([
+      getPlaylist(client, playlist.id, profile.id),
+      fetchPlaylistTracks(client, playlist.id),
+    ])
+    if (!latest()) return
+    setPlaylist(row)
+    setTracks(loaded)
+  }, [client, playlist, me])
 
   const chooseStrategy = useCallback(
     (id) => {
@@ -559,6 +584,14 @@ export function useSorterApp(auth, route, navigate, demo = null) {
       }
       return
     }
+    // Mirror run §7: while YouTube is being updated the URL stays on the
+    // review, as D46 holds Progress, so back cannot leave a run mid-write.
+    if (mirrorBusy) {
+      if (playlist && (route.view !== 'review' || route.playlistId !== playlist.id)) {
+        navigate({ view: 'review', source: 'spotify', playlistId: playlist.id })
+      }
+      return
+    }
 
     const switched = route.source !== stateSource.current
     if (switched) {
@@ -581,7 +614,7 @@ export function useSorterApp(auth, route, navigate, demo = null) {
     // Progress with nothing to report, such as a forward step back onto it
     // after the playlist was opened afresh.
     if (route.view === 'progress' && !outcome) navigate(sort, { replace: true })
-  }, [ready, run, route, playlist, outcome, navigate, loadPlaylist, resetForSource])
+  }, [ready, run, mirrorBusy, route, playlist, outcome, navigate, loadPlaylist, resetForSource])
 
   return {
     setScreen,
@@ -624,5 +657,8 @@ export function useSorterApp(auth, route, navigate, demo = null) {
     applyClone,
     cancelRun,
     undoLast,
+    mirrorBusy,
+    setMirrorBusy,
+    refreshPlaylist,
   }
 }

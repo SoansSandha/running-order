@@ -3,13 +3,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app as proxy
-from ytmusicapi.exceptions import YTMusicServerError
+from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
 
 
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.setattr(proxy, "_client", None)
-    return TestClient(proxy.app)
+    # D48: the proxy answers only requests addressed to 127.0.0.1, and takes
+    # writes only from the app's origin, which a browser always sends.
+    return TestClient(proxy.app, base_url="http://127.0.0.1:8787", headers={"Origin": proxy.VITE_ORIGIN})
+
+
+@pytest.fixture
+def bare(monkeypatch):
+    """No Origin at all: what curl, or any program that is not a browser, sends."""
+    monkeypatch.setattr(proxy, "_client", None)
+    return TestClient(proxy.app, base_url="http://127.0.0.1:8787")
 
 
 def test_auth_status_false_when_no_credentials(client, monkeypatch):
@@ -130,6 +139,15 @@ class RaisingYT:
         raise RuntimeError(self._message)
 
     def get_watch_playlist(self, videoId=None, limit=25):
+        raise RuntimeError(self._message)
+
+    def add_playlist_items(self, playlistId, videoIds=None, source_playlist=None, duplicates=False):
+        raise RuntimeError(self._message)
+
+    def edit_playlist(self, playlistId, moveItem=None):
+        raise RuntimeError(self._message)
+
+    def remove_playlist_items(self, playlistId, videos):
         raise RuntimeError(self._message)
 
 
@@ -301,3 +319,204 @@ def test_track_failure_is_clean_and_drops_the_cached_client(client, monkeypatch)
     assert response.status_code == 502
     assert "leaky detail" not in response.text
     assert proxy._client is None
+
+
+def test_a_request_addressed_to_another_host_is_refused(monkeypatch):
+    # D48: DNS rebinding reaches this port under the attacker's own name.
+    monkeypatch.setattr(proxy, "get_client", lambda: object())
+    rebound = TestClient(proxy.app, base_url="http://evil.example:8787")
+    assert rebound.get("/auth/status").status_code == 400
+
+
+def test_localhost_is_an_accepted_host(monkeypatch):
+    monkeypatch.setattr(proxy, "get_client", lambda: object())
+    local = TestClient(proxy.app, base_url="http://localhost:8787")
+    assert local.get("/auth/status").status_code == 200
+
+
+def test_a_write_from_another_origin_is_refused(client, monkeypatch):
+    fake = FakeYT(playlist={"id": "LM", "tracks": []})
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.post("/auth/status", headers={"Origin": "http://evil.example"})
+    assert response.status_code == 403
+    assert fake.get_playlist_calls == []
+
+
+def test_a_write_with_no_origin_is_refused(bare, monkeypatch):
+    fake = FakeYT(playlist={"id": "LM", "tracks": []})
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert bare.post("/auth/status").status_code == 403
+    assert fake.get_playlist_calls == []
+
+
+def test_a_read_needs_no_origin(bare, monkeypatch):
+    monkeypatch.setattr(proxy, "get_client", lambda: object())
+    assert bare.get("/auth/status").json() == {"authenticated": True}
+
+
+class WriteYT:
+    """Records each edit, and answers as ytmusicapi does."""
+
+    def __init__(self, add_response=None, status="STATUS_SUCCEEDED"):
+        self._add_response = add_response
+        self._status = status
+        self.calls = []
+
+    def add_playlist_items(self, playlistId, videoIds=None, source_playlist=None, duplicates=False):
+        self.calls.append(("add", playlistId, videoIds, duplicates))
+        return self._add_response
+
+    def edit_playlist(self, playlistId, moveItem=None):
+        self.calls.append(("move", playlistId, moveItem))
+        return self._status
+
+    def remove_playlist_items(self, playlistId, videos):
+        self.calls.append(("remove", playlistId, videos))
+        return self._status
+
+
+# The shape add_playlist_items answers on success (ytmusicapi 1.12.3).
+ADDED = {
+    "status": "STATUS_SUCCEEDED",
+    "playlistEditResults": [
+        {"videoId": "v1", "setVideoId": "s1", "multiSelectData": {}},
+        {"videoId": "v2", "setVideoId": "s2", "multiSelectData": {}},
+    ],
+}
+
+
+def test_add_refuses_duplicates_and_answers_the_new_item_ids(client, monkeypatch):
+    fake = WriteYT(add_response=ADDED)
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.post("/playlists/PL1/items", json={"videoIds": ["v1", "v2"]})
+    assert response.json() == {
+        "added": [{"videoId": "v1", "setVideoId": "s1"}, {"videoId": "v2", "setVideoId": "s2"}],
+    }
+    # duplicates=False: one video already present refuses the whole request.
+    assert fake.calls == [("add", "PL1", ["v1", "v2"], False)]
+
+
+def test_a_refused_add_is_a_409(client, monkeypatch):
+    fake = WriteYT(add_response={"status": "STATUS_FAILED", "actions": []})
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.post("/playlists/PL1/items", json={"videoIds": ["v1"]})
+    assert response.status_code == 409
+    assert "added" not in response.json()
+
+
+def test_a_write_body_must_be_json(client, monkeypatch):
+    # A plain HTML form posted from another site is form-encoded.
+    fake = WriteYT(add_response=ADDED)
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.post(
+        "/playlists/PL1/items",
+        content="videoIds=v1",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert response.status_code == 422
+    assert fake.calls == []
+
+
+def test_move_before_another_item(client, monkeypatch):
+    fake = WriteYT()
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    response = client.patch("/playlists/PL1/order", json={"setVideoId": "s1", "beforeSetVideoId": "s9"})
+    assert response.json() == {"ok": True}
+    assert fake.calls == [("move", "PL1", ("s1", "s9"))]
+
+
+def test_move_with_no_successor_names_only_the_item(client, monkeypatch):
+    fake = WriteYT()
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    client.patch("/playlists/PL1/order", json={"setVideoId": "s1", "beforeSetVideoId": None})
+    assert fake.calls == [("move", "PL1", "s1")]
+
+
+def test_a_refused_move_is_a_409(client, monkeypatch):
+    monkeypatch.setattr(proxy, "get_client", lambda: WriteYT(status={"status": "STATUS_FAILED"}))
+    assert client.patch("/playlists/PL1/order", json={"setVideoId": "s1"}).status_code == 409
+
+
+def test_remove_passes_both_ids_of_each_item(client, monkeypatch):
+    fake = WriteYT()
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    items = [{"videoId": "v1", "setVideoId": "s1"}]
+    response = client.request("DELETE", "/playlists/PL1/items", json={"items": items})
+    assert response.json() == {"ok": True}
+    assert fake.calls == [("remove", "PL1", items)]
+
+
+WRITES = [
+    ("POST", "/playlists/PL1/items", {"videoIds": ["v1"]}),
+    ("PATCH", "/playlists/PL1/order", {"setVideoId": "s1"}),
+    ("DELETE", "/playlists/PL1/items", {"items": [{"videoId": "v1", "setVideoId": "s1"}]}),
+]
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_every_write_needs_the_apps_origin(bare, monkeypatch, method, path, body):
+    fake = WriteYT(add_response=ADDED)
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert bare.request(method, path, json=body).status_code == 403
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_a_failing_write_is_clean_and_drops_the_cached_client(client, monkeypatch, method, path, body):
+    monkeypatch.setattr(proxy, "_client", RaisingYT("top secret cookie"))
+    response = client.request(method, path, json=body)
+    assert response.status_code == 502
+    assert "top secret cookie" not in response.text
+    assert proxy._client is None
+
+
+def test_cors_lets_the_app_delete(client):
+    preflight = client.options(
+        "/playlists/PL1/items",
+        headers={"Origin": proxy.VITE_ORIGIN, "Access-Control-Request-Method": "DELETE"},
+    )
+    assert "DELETE" in preflight.headers.get("access-control-allow-methods", "")
+
+
+def test_an_empty_add_is_refused_before_it_reaches_youtube(client, monkeypatch):
+    # ytmusicapi raises YTMusicUserError for an empty list, before any network call.
+    fake = WriteYT(add_response=ADDED)
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert client.post("/playlists/PL1/items", json={"videoIds": []}).status_code == 422
+    assert fake.calls == []
+
+
+def test_an_empty_remove_is_refused_before_it_reaches_youtube(client, monkeypatch):
+    fake = WriteYT()
+    monkeypatch.setattr(proxy, "get_client", lambda: fake)
+    assert client.request("DELETE", "/playlists/PL1/items", json={"items": []}).status_code == 422
+    assert fake.calls == []
+
+
+class MalformedYT:
+    """A client whose calls fail the way ytmusicapi fails on a bad argument."""
+
+    def add_playlist_items(self, playlistId, videoIds=None, source_playlist=None, duplicates=False):
+        raise YTMusicUserError("leaky detail")
+
+    def edit_playlist(self, playlistId, moveItem=None):
+        raise YTMusicUserError("leaky detail")
+
+    def remove_playlist_items(self, playlistId, videos):
+        raise YTMusicUserError("leaky detail")
+
+
+@pytest.mark.parametrize("method,path,body", WRITES)
+def test_a_malformed_write_is_a_400_and_keeps_the_client(client, monkeypatch, method, path, body):
+    # A client-side input error is not a dead session: no 502, and no re-auth.
+    fake = MalformedYT()
+    monkeypatch.setattr(proxy, "_client", fake)
+    response = client.request(method, path, json=body)
+    assert response.status_code == 400
+    assert "leaky detail" not in response.text
+    assert proxy._client is fake
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_no_api_docs_are_served(client, path):
+    assert client.get(path).status_code == 404

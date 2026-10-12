@@ -35,12 +35,15 @@ export function createSnapshot(playlist, tracks) {
  * skipped. The result is always a permutation of what the playlist holds now,
  * never of what it held then.
  */
-export function buildRestoreOrder(currentTracks, snapshot) {
+export function buildRestoreOrder(currentTracks, snapshot, keyOf = (track) => track.uri) {
+  // The mirror run restores YouTube by videoId (mirror run design §6), giving
+  // its record's `orderBefore` as `snapshot.uris`.
   const available = new Map()
   currentTracks.forEach((track, index) => {
-    const queue = available.get(track.uri)
+    const key = keyOf(track)
+    const queue = available.get(key)
     if (queue) queue.push(index)
-    else available.set(track.uri, [index])
+    else available.set(key, [index])
   })
 
   const restored = []
@@ -87,4 +90,64 @@ export function clearSnapshot(playlistId, storage = globalThis.localStorage) {
 /** The snapshot as a downloadable file, for undo that outlives the browser. */
 export function serializeSnapshot(snapshot) {
   return JSON.stringify(snapshot, null, 2)
+}
+
+const MIRROR_PREFIX = 'playlist-sorter:mirror-undo:'
+const MIRROR_VERSION = 1
+
+/**
+ * The undo record a mirror run writes against (mirror run design §6). An
+ * unfinished record for the same two playlists carries forward, so Undo after
+ * stopping and running again reaches back to before the first attempt (D54).
+ * Anything else starts afresh from YouTube's order now.
+ */
+export function startMirrorRecord(prior, { youtubePlaylistId, spotifyPlaylistId, youtubeTracks }, now = Date.now()) {
+  if (
+    prior &&
+    !prior.finished &&
+    prior.youtubePlaylistId === youtubePlaylistId &&
+    prior.spotifyPlaylistId === spotifyPlaylistId
+  ) {
+    return prior
+  }
+  return {
+    version: MIRROR_VERSION,
+    youtubePlaylistId,
+    spotifyPlaylistId,
+    orderBefore: youtubeTracks.map((track) => track.id),
+    addedToYoutube: [],
+    addedToSpotify: [],
+    // Set once the run starts reordering; Undo restores the order only then.
+    reordered: false,
+    finished: false,
+    createdAt: now,
+  }
+}
+
+/** False when the browser refuses; the record then lives only in memory (§6). */
+export function saveMirrorRecord(record, storage = globalThis.localStorage) {
+  try {
+    storage.setItem(MIRROR_PREFIX + record.youtubePlaylistId, JSON.stringify(record))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function loadMirrorRecord(youtubePlaylistId, storage = globalThis.localStorage) {
+  try {
+    const raw = storage?.getItem(MIRROR_PREFIX + youtubePlaylistId)
+    const record = raw ? JSON.parse(raw) : null
+    return record?.version === MIRROR_VERSION ? record : null
+  } catch {
+    return null
+  }
+}
+
+export function clearMirrorRecord(youtubePlaylistId, storage = globalThis.localStorage) {
+  try {
+    storage?.removeItem(MIRROR_PREFIX + youtubePlaylistId)
+  } catch {
+    // See saveSnapshot.
+  }
 }

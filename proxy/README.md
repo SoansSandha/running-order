@@ -42,6 +42,14 @@ on this process. Only the YouTube features go quiet.
 `POST /auth/status` makes one real call to YouTube, which is the only way to
 tell a live session from an expired one.
 
+Every request must be addressed to `127.0.0.1` or `localhost`, and every
+`POST`, `PATCH` and `DELETE` must carry the app's own `Origin` (mirror run
+design D48). To make one by hand:
+
+```bash
+curl -X POST -H "Origin: http://127.0.0.1:5173" http://127.0.0.1:8787/auth/status
+```
+
 ## When the session expires
 
 The app says "Your YouTube Music session has expired" when YouTube stops

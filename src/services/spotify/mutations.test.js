@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { addTracksInChunks, createPlaylist, reorderTrack } from './mutations.js'
+import { addTracksInChunks, createPlaylist, removeTracks, reorderTrack } from './mutations.js'
 
 function recorder(results = []) {
   const queue = [...results]
@@ -9,7 +9,7 @@ function recorder(results = []) {
       calls.push({ method, path, ...options })
       return queue.length ? queue.shift() : {}
     })
-  return { calls, post: record('POST'), put: record('PUT') }
+  return { calls, post: record('POST'), put: record('PUT'), delete: record('DELETE') }
 }
 
 describe('reorderTrack', () => {
@@ -131,5 +131,19 @@ describe('createPlaylist', () => {
     const client = rejecting(403, ['/me/playlists', '/users/u1/playlists'])
     await expect(createPlaylist(client, 'u1', { name: 'Sorted' })).rejects.toThrow()
     expect(client.calls).toHaveLength(2)
+  })
+})
+
+describe('removeTracks', () => {
+  test('removes every copy of each URI, in one request', async () => {
+    const client = recorder()
+    await removeTracks(client, 'p1', ['spotify:track:a', 'spotify:track:b'])
+    expect(client.calls).toEqual([
+      {
+        method: 'DELETE',
+        path: '/playlists/p1/items',
+        body: { items: [{ uri: 'spotify:track:a' }, { uri: 'spotify:track:b' }] },
+      },
+    ])
   })
 })

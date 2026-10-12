@@ -78,10 +78,58 @@ async (page) => {
     await page.route(host, (route) => route.fulfill({ contentType: 'text/html', body: '<html></html>' }))
   }
 
+  // Every Spotify song's match-book key: its id, or a local file's URI.
+  const spotifyKeys = await page.evaluate(async () => {
+    const module = await import('/src/ui/demoData.js')
+    return module.loadDemo().tracks.map((track) => track.id ?? track.uri).filter(Boolean)
+  })
+  // The review pass: one settled pair, and one song marked on each side.
+  const reviewBook = [
+    { spotifyKey: demo[0].id, youtubeVideoId: 'strong00000', verdict: 'same', decidedAt: 1 },
+    { spotifyKey: demo[12].id, youtubeVideoId: null, verdict: 'none', decidedAt: 1 },
+    { spotifyKey: null, youtubeVideoId: 'longvid5000', verdict: 'none', decidedAt: 1 },
+  ]
+  // The review-ready pass (mirror run design §7): every row settled, so the
+  // panel is Ready. The six twins are confirmed, one long-titled find is to
+  // be added on each side, and every other song is marked.
+  const longFind = (side, uri) => ({
+    side,
+    name: LONG,
+    artists: LONG_ARTISTS,
+    durationMs: 241000,
+    videoType: side === 'youtube' ? 'MUSIC_VIDEO_TYPE_OMV' : null,
+    uri,
+  })
+  const twins = [
+    ...demo.slice(0, 4).map((track, index) => [track.id, `strong${index}0000`.slice(0, 11)]),
+    ...demo.slice(4, 6).map((track, index) => [track.id, `likely${index}0000`.slice(0, 11)]),
+  ]
+  const settledKeys = new Set([...twins.map(([key]) => key), demo[6].id])
+  const readyBook = [
+    ...twins.map(([spotifyKey, youtubeVideoId]) => ({ spotifyKey, youtubeVideoId, verdict: 'same', decidedAt: 1 })),
+    { spotifyKey: demo[6].id, youtubeVideoId: 'findyt00000', verdict: 'same', decidedAt: 1, found: longFind('youtube', null) },
+    {
+      spotifyKey: 'findsp00000000000000000',
+      youtubeVideoId: 'longvid5000',
+      verdict: 'same',
+      decidedAt: 1,
+      found: longFind('spotify', 'spotify:track:findsp00000000000000000'),
+    },
+    ...['longvid0000', 'longvid1000', 'longvid2000', 'longvid3000', 'longvid4000'].map((youtubeVideoId) => ({
+      spotifyKey: null,
+      youtubeVideoId,
+      verdict: 'none',
+      decidedAt: 1,
+    })),
+    ...spotifyKeys
+      .filter((key) => !settledKeys.has(key))
+      .map((spotifyKey) => ({ spotifyKey, youtubeVideoId: null, verdict: 'none', decidedAt: 1 })),
+  ]
+
   const measure = () => {
     const found = []
     const rows = document.querySelectorAll(
-      '.board-row, .board-cols, .lever-row, .head, .tally, .peek-row, .tray-cand, .tray-field, .tray-pair .tray-actions, .tray-head, .tray-foot',
+      '.board-row, .board-cols, .lever-row, .head, .tally, .peek-row, .tray-cand, .tray-field, .tray-pair .tray-actions, .tray-head, .tray-foot, .mirror-row',
     )
     for (const row of rows) {
       const rowBox = row.getBoundingClientRect()
@@ -120,28 +168,32 @@ async (page) => {
     ['progress', '/spotify/demo-2/progress?demo=1&progress=running'],
     ['progress-done', '/spotify/demo-1/progress?demo=1&progress=done'],
     ['review', '/spotify/demo-1/review?demo=1'],
+    ['review-ready', '/spotify/demo-1/review?demo=1'],
   ]
   for (const [name, path] of screens) {
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 })
-      // One settled pair, so the Settled group has a row to measure, and one
-      // song marked on each side (a long YouTube title among them), so the
-      // "Not on the other service" group does too.
+      // The review pass gets one settled pair and one song marked on each
+      // side, so the Settled and "Not on the other service" groups have rows
+      // to measure. The review-ready pass gets every row settled.
       await page.evaluate(
-        ([key, markedKey]) =>
-          localStorage.setItem(
-            'playlist-sorter:match-book',
-            JSON.stringify([
-              { spotifyKey: key, youtubeVideoId: 'strong00000', verdict: 'same', decidedAt: 1 },
-              { spotifyKey: markedKey, youtubeVideoId: null, verdict: 'none', decidedAt: 1 },
-              { spotifyKey: null, youtubeVideoId: 'longvid5000', verdict: 'none', decidedAt: 1 },
-            ]),
-          ),
-        [demo[0].id, demo[12].id],
+        (book) => localStorage.setItem('playlist-sorter:match-book', JSON.stringify(book)),
+        name === 'review-ready' ? readyBook : reviewBook,
       )
       await page.goto(`${BASE}${path}`)
       await page.evaluate(() => document.fonts.ready)
       await page.waitForTimeout(500)
+      if (name === 'review-ready') {
+        await page.selectOption('#review-youtube', 'PLT')
+        await page.waitForSelector('.mirror')
+        if (await page.getByRole('button', { name: 'Update YouTube' }).isDisabled()) {
+          throw new Error(`review-ready@${width}: the mirror panel is not Ready`)
+        }
+        for (const summary of await page.locator('.mirror-list > summary').all()) await summary.click()
+        if ((await page.locator('.mirror-row').count()) < 2) throw new Error(`review-ready@${width}: no rows to measure`)
+        note(`review-ready@${width}`, await page.evaluate(measure))
+        continue
+      }
       if (name !== 'review') {
         note(`${name}@${width}`, await page.evaluate(measure))
         continue

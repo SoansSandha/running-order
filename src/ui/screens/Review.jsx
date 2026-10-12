@@ -1,8 +1,9 @@
 /**
  * Match review: which Spotify track is which YouTube track.
  *
- * Read-only. Decisions go to the match book; nothing is written to Spotify or
- * YouTube. Likely rows warm amber (pending) and settled rows take the green
+ * Decisions go to the match book. The one write is Update YouTube, made
+ * through its panel (docs/2026-10-11-mirror-run-design.md). Likely rows warm
+ * amber (pending) and settled rows take the green
  * seat (committed), reusing the board's data-moves and data-written states.
  * "Search all unmatched" looks for the leftovers' twins in the other
  * service's catalogue, and every row opens a tray beneath it where one song
@@ -17,6 +18,8 @@ import { closestTitles } from '../../match/pairTracks.js'
 import { explainPair } from '../../match/scorePair.js'
 import { artistsOf, formatCount, formatDelta, openHref, titleOf } from '../format.js'
 import { useMatchReview } from '../useMatchReview.js'
+import { useMirrorRun } from '../useMirrorRun.js'
+import { MirrorPanel } from './MirrorPanel.jsx'
 import { Frame, Head, Lever, LeverRow, Meter, Notice, QuietLever } from '../components/chrome.jsx'
 import { UnlitField } from '../components/UnlitField.jsx'
 import { MatchTray } from './MatchTray.jsx'
@@ -24,6 +27,7 @@ import { MatchTray } from './MatchTray.jsx'
 export function ReviewScreen({ app }) {
   const { playlist, tracks, youtube, client, setScreen, busy, error } = app
   const review = useMatchReview({ youtube, spotify: client, spotifyTracks: tracks })
+  const mirror = useMirrorRun({ app, review })
   const { result, sweep } = review
   const [openKey, setOpenKey] = useState(null)
   const tier = (name) => result?.pairs.filter((pair) => pair.tier === name) ?? []
@@ -32,7 +36,8 @@ export function ReviewScreen({ app }) {
   const settled = tier('certain')
   // M-1: a row can move mid-decision while a sweep lands results, so deciding
   // waits until it ends or is stopped.
-  const deciding = sweep?.running === true
+  // Mirror run §7: a run waits the same way, and holds every lever until it ends.
+  const deciding = sweep?.running === true || mirror.running
 
   const toggle = (key) => setOpenKey((open) => (open === key ? null : key))
   const close = () => setOpenKey(null)
@@ -97,7 +102,7 @@ export function ReviewScreen({ app }) {
   return (
     <Frame fill>
       <Head
-        back={{ label: 'Back to sorting', onClick: () => setScreen('sort') }}
+        back={mirror.running ? undefined : { label: 'Back to sorting', onClick: () => setScreen('sort') }}
         title={playlist?.name ?? 'Playlist'}
         tally={
           result
@@ -140,7 +145,7 @@ export function ReviewScreen({ app }) {
           onChange={(event) => review.choose(event.target.value)}
           // Matching scores against the Spotify tracks as they stand when a
           // playlist is chosen, so it waits until they have been read.
-          disabled={tracks.length === 0}
+          disabled={tracks.length === 0 || mirror.running}
         >
           <option value="">Choose a YouTube Music playlist</option>
           {review.youtubePlaylists.map((item) => (
@@ -219,6 +224,8 @@ export function ReviewScreen({ app }) {
           </Notice>
         </div>
       ))}
+
+      {result ? <MirrorPanel mirror={mirror} unavailable={review.unavailable} waiting={sweep?.running === true} /> : null}
 
       {result ? (
         <div className="board board-review">
@@ -322,13 +329,16 @@ export function ReviewScreen({ app }) {
       <LeverRow>
         <QuietLever
           onClick={review.searchAll}
-          disabled={!result || sweep?.running === true || review.unsearchedCount === 0}
+          disabled={!result || sweep?.running === true || mirror.running || review.unsearchedCount === 0}
         >
           Search all unmatched
         </QuietLever>
         <span className="spacer" />
         <Lever disabled={strong.length === 0 || deciding} onClick={() => review.confirmAll(strong)}>
           Confirm all <span className="num">{formatCount(strong.length)}</span> strong
+        </Lever>
+        <Lever disabled={!mirror.canRun || deciding} onClick={mirror.run}>
+          Update YouTube
         </Lever>
       </LeverRow>
     </Frame>

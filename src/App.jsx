@@ -41,7 +41,9 @@ export default function App() {
   // D46: a running write shows Progress whatever the URL says, for the moment
   // before the sync step puts the URL back, so no other screen's lever is on
   // screen mid-write.
-  const view = app.run ? 'progress' : route.view
+  // Mirror run §7, the same hold: the review stays mounted while it writes,
+  // so the run keeps its screen and its Stop.
+  const view = app.run ? 'progress' : app.mirrorBusy ? 'review' : route.view
 
   // Connect is a gate, not a route (D45): signed out, it shows at any URL.
   const screen = !auth.isConnected && !demo
