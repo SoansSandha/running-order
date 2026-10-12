@@ -30,6 +30,15 @@ const TRACK_FIELDS = [
 ].join(',')
 
 /**
+ * What a library row reads from one playlist. Both count names are asked
+ * for, as above; without a projection the reply would carry its first
+ * hundred tracks too.
+ */
+const PLAYLIST_FIELDS =
+  'id,name,description,images(url),owner(id,display_name),collaborative,public,snapshot_id,' +
+  'items.total,tracks.total'
+
+/**
  * Debug switch: turn the projection off to see an item's real shape.
  *
  * A projection cannot reveal a field it does not name, so when the shape is
@@ -79,7 +88,23 @@ export async function listEditablePlaylists(client, currentUserId, { onProgress 
     onProgress,
   })
 
-  return raw.filter(Boolean).map((item) => ({
+  return raw.filter(Boolean).map((item) => toPlaylist(item, currentUserId))
+}
+
+/**
+ * One playlist, as the row the library would list for it. A URL can name a
+ * playlist the library has not been read for (routes design §5).
+ */
+export async function getPlaylist(client, playlistId, currentUserId) {
+  const item = await client.get(`/playlists/${playlistId}`, {
+    query: { fields: projectionEnabled ? PLAYLIST_FIELDS : undefined },
+  })
+  return toPlaylist(item, currentUserId)
+}
+
+/** A playlist as the app's row, flagged with whether we may write to it. */
+function toPlaylist(item, currentUserId) {
+  return {
     id: item.id,
     name: item.name,
     description: item.description ?? '',
@@ -90,7 +115,7 @@ export async function listEditablePlaylists(client, currentUserId, { onProgress 
     isPublic: item.public === true,
     snapshotId: item.snapshot_id ?? null,
     editable: item.owner?.id === currentUserId || item.collaborative === true,
-  }))
+  }
 }
 
 /** The playlist's current snapshot id, re-read immediately before any write. */

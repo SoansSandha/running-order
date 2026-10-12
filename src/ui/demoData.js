@@ -10,6 +10,7 @@
  */
 
 import { normalizePlaylistItem } from '../model/track.js'
+import { parseRoute } from './route.js'
 import { sortTracks } from '../sort/index.js'
 
 const CATALOGUE = [
@@ -136,7 +137,9 @@ export function loadDemo() {
 
   const shuffled = buildTracks()
   const nearlySorted = buildNearlySorted(shuffled)
-  const which = Number(params.get('playlist') ?? '1')
+  // The path names the demo playlist (routes design §6); demo-2 is the
+  // nearly sorted one.
+  const which = parseRoute(window.location).playlistId === 'demo-2' ? 2 : 1
   const chosen = which === 2 ? nearlySorted : shuffled
   // A short playlist leaves the unlit field visible on the track board,
   // which is otherwise only observable on Playlists.
@@ -162,8 +165,6 @@ export function loadDemo() {
     playlists,
     tracks,
     playlist: playlists[which === 2 ? 1 : 0],
-    // Lets a capture land straight on one screen, in a given state.
-    screen: params.get('screen') ?? 'playlists',
     // Blocked tracks sort to the bottom, so proving their treatment needs a
     // way to land the board on them.
     focusKey:

@@ -22,7 +22,7 @@ import { UnlitField } from '../components/UnlitField.jsx'
 import { MatchTray } from './MatchTray.jsx'
 
 export function ReviewScreen({ app }) {
-  const { playlist, tracks, youtube, client, setScreen } = app
+  const { playlist, tracks, youtube, client, setScreen, busy, error } = app
   const review = useMatchReview({ youtube, spotify: client, spotifyTracks: tracks })
   const { result, sweep } = review
   const [openKey, setOpenKey] = useState(null)
@@ -112,6 +112,23 @@ export function ReviewScreen({ app }) {
         }
       />
 
+      {busy ? (
+        <div className="section">
+          <p className="col-label" style={{ marginBottom: 8 }}>
+            {busy.label}
+          </p>
+          <Meter done={busy.done} total={busy.total || 1} />
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="section">
+          <Notice tone="red" title="Could not read this playlist">
+            {error}
+          </Notice>
+        </div>
+      ) : null}
+
       <div className="section">
         <label className="field-label" htmlFor="review-youtube">
           Match against
@@ -121,6 +138,9 @@ export function ReviewScreen({ app }) {
           className="field"
           value={review.chosenId ?? ''}
           onChange={(event) => review.choose(event.target.value)}
+          // Matching scores against the Spotify tracks as they stand when a
+          // playlist is chosen, so it waits until they have been read.
+          disabled={tracks.length === 0}
         >
           <option value="">Choose a YouTube Music playlist</option>
           {review.youtubePlaylists.map((item) => (

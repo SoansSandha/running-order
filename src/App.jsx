@@ -9,6 +9,7 @@ import { setFieldProjection } from './services/spotify/playlists.js'
 import { enableApiLog } from './ui/apiLog.js'
 import { ApiLog } from './ui/components/ApiLog.jsx'
 import { loadDemo } from './ui/demoData.js'
+import { useRoute } from './ui/route.js'
 import { useSorterApp } from './ui/useSorterApp.js'
 
 // Dev-only synthetic data, so the board can be designed against realistic
@@ -35,17 +36,23 @@ if (
 
 export default function App() {
   const auth = useAuth()
-  const app = useSorterApp(auth, demo)
+  const [route, navigate] = useRoute()
+  const app = useSorterApp(auth, route, navigate, demo)
+  // D46: a running write shows Progress whatever the URL says, for the moment
+  // before the sync step puts the URL back, so no other screen's lever is on
+  // screen mid-write.
+  const view = app.run ? 'progress' : route.view
 
+  // Connect is a gate, not a route (D45): signed out, it shows at any URL.
   const screen = !auth.isConnected && !demo
     ? <ConnectScreen auth={auth} />
-    : app.screen === 'sort'
+    : view === 'sort'
       ? <SortScreen app={app} />
-      : app.screen === 'preview'
+      : view === 'preview'
         ? <PreviewScreen app={app} />
-        : app.screen === 'progress'
+        : view === 'progress'
           ? <ProgressScreen app={app} />
-          : app.screen === 'review'
+          : view === 'review'
             ? <ReviewScreen app={app} />
             : <PlaylistsScreen app={app} auth={auth} />
 

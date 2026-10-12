@@ -114,12 +114,12 @@ async (page) => {
   }
   const screens = [
     ['playlists', '/?demo=1'],
-    ['sort', '/?demo=1&screen=sort'],
-    ['sort-csv', '/?demo=1&screen=sort&csv=1'],
-    ['preview', '/?demo=1&screen=preview&playlist=2'],
-    ['progress', '/?demo=1&screen=progress&playlist=2&progress=running'],
-    ['progress-done', '/?demo=1&screen=progress&progress=done'],
-    ['review', '/?demo=1&screen=review'],
+    ['sort', '/spotify/demo-1?demo=1'],
+    ['sort-csv', '/spotify/demo-1?demo=1&csv=1'],
+    ['preview', '/spotify/demo-2/preview?demo=1'],
+    ['progress', '/spotify/demo-2/progress?demo=1&progress=running'],
+    ['progress-done', '/spotify/demo-1/progress?demo=1&progress=done'],
+    ['review', '/spotify/demo-1/review?demo=1'],
   ]
   for (const [name, path] of screens) {
     for (const width of WIDTHS) {

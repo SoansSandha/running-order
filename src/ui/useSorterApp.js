@@ -1,15 +1,17 @@
 /**
- * Application state: what board is showing, what it is showing about, and
- * what happens when the lever is pulled.
+ * Application state: what the board is showing, and what happens when the
+ * lever is pulled. Which screen shows, which library is browsed and which
+ * playlist is open belong to the URL (src/ui/route.js); this hook follows it.
  *
  * All the hard thinking lives in the pure layers underneath. This hook only
  * sequences them and holds their results.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   fetchPlaylistTracks,
   getCurrentUser,
+  getPlaylist,
   getPlaylistSnapshot,
   listEditablePlaylists,
 } from '../services/spotify/playlists.js'
@@ -35,11 +37,13 @@ import { defaultOptionsFor, sortTracks, strategyById } from '../sort/index.js'
 
 export const CSV_STRATEGY = 'csv'
 
-export function useSorterApp(auth, demo = null) {
+/** A URL names a playlist this account has nothing at. */
+const NOT_FOUND = 'This account has no playlist at that address.'
+
+export function useSorterApp(auth, route, navigate, demo = null) {
   const { client } = auth
   const writer = useMemo(() => createSpotifyWriter(client), [client])
 
-  const [screen, setScreen] = useState(demo?.screen ?? 'playlists')
   const [me, setMe] = useState(demo?.me ?? null)
   const [playlists, setPlaylists] = useState(demo?.playlists ?? [])
   const [busy, setBusy] = useState(null)
@@ -59,8 +63,28 @@ export function useSorterApp(auth, demo = null) {
   const [outcome, setOutcome] = useState(demo?.outcome ?? null)
   const abort = useRef(null)
 
-  const [source, setSource] = useState(demo?.source ?? 'spotify')
+  /**
+   * Which library is being browsed: the path's source on a playlist route,
+   * `?source` on home. The URL owns it (D41), so back and forward change it
+   * just as the toggle does.
+   */
+  const source = route.source
   const youtube = useMemo(() => createYouTubeClient({}), [])
+
+  /**
+   * Show another screen of the open playlist, or the library (D47). The name
+   * is kept so the screens did not have to change; it moves the URL, and the
+   * URL decides what renders.
+   */
+  const setScreen = useCallback(
+    (view) =>
+      navigate(
+        view === 'playlists'
+          ? { view: 'home', source, playlistId: null }
+          : { view, source, playlistId: route.playlistId },
+      ),
+    [navigate, source, route.playlistId],
+  )
 
   /**
    * The service any capability question is really about.
@@ -146,62 +170,120 @@ export function useSorterApp(auth, demo = null) {
 
   /* ---- Loading ---------------------------------------------------------- */
 
+  /**
+   * Bumped by every library read, so only the latest one may land. The
+   * toggle is held while a read is in flight, but back and forward are not:
+   * a slow YouTube read landing after back to Spotify would fill the
+   * Spotify board with YouTube rows.
+   */
+  const libraryTicket = useRef(0)
+
   const loadPlaylists = useCallback(async () => {
     if (demoRef.current) return
+    const ticket = ++libraryTicket.current
+    const latest = () => ticket === libraryTicket.current
     setError(null)
     setBusy({ label: 'Reading your library', done: 0, total: 0 })
     try {
       if (source === 'youtube') {
         setBusy({ label: 'Reading your YouTube library', done: 0, total: 0 })
-        setPlaylists(toAppPlaylists(await youtube.listPlaylists()))
+        const listed = await youtube.listPlaylists()
+        if (latest()) setPlaylists(toAppPlaylists(listed))
         return
       }
       const profile = await getCurrentUser(client)
+      if (!latest()) return
       setMe(profile)
       const found = await listEditablePlaylists(client, profile.id, {
-        onProgress: (done, total) => setBusy({ label: 'Reading your library', done, total }),
+        onProgress: (done, total) => {
+          if (latest()) setBusy({ label: 'Reading your library', done, total })
+        },
       })
-      setPlaylists(found)
+      if (latest()) setPlaylists(found)
     } catch (failure) {
-      setError(failure.message)
+      if (latest()) setError(failure.message)
     } finally {
-      setBusy(null)
+      if (latest()) setBusy(null)
     }
   }, [client, source, youtube])
 
-  const openPlaylist = useCallback(
-    async (chosen) => {
+  /** Bumped by every load, so only the latest one may land. */
+  const loadTicket = useRef(0)
+
+  /**
+   * Read one playlist: from the row the board handed over, or, when the URL
+   * named a playlist nothing has read yet, by id (routes design §5).
+   */
+  const loadPlaylist = useCallback(
+    async (from, id, row = null) => {
+      const ticket = ++loadTicket.current
+      const latest = () => ticket === loadTicket.current
       setError(null)
-      setPlaylist(chosen)
+      // A stand-in until the real row arrives. It names the route's playlist,
+      // so the sync step sees it as open and does not start a second load.
+      setPlaylist(row ?? { id, source: from })
       setTracks([])
       setCsv(null)
       setOutcome(null)
-      setScreen('sort')
 
       if (demoRef.current) {
-        setTracks(demoRef.current.tracks.slice(0, chosen.trackCount))
+        const found = row ?? demoRef.current.playlists.find((item) => item.id === id)
+        if (!found) {
+          setError(NOT_FOUND)
+          return
+        }
+        setPlaylist(found)
+        setTracks(demoRef.current.tracks.slice(0, found.trackCount))
         return
       }
 
-      setBusy({ label: `Reading ${chosen.name}`, done: 0, total: chosen.trackCount })
+      setBusy({ label: row ? `Reading ${row.name}` : 'Reading the playlist', done: 0, total: row?.trackCount ?? 0 })
       try {
-        if (chosen.source === 'youtube') {
-          const fetched = await youtube.fetchPlaylist(chosen.id)
+        if (from === 'youtube') {
+          const fetched = await youtube.fetchPlaylist(id)
+          if (!latest()) return
+          // A system playlist such as Liked Music is dropped here, as it is
+          // from the library, and so reads as not found.
+          const found =
+            row ?? toAppPlaylists([{ id, title: fetched.title, count: fetched.tracks?.length ?? 0 }])[0]
+          if (!found) throw new Error(NOT_FOUND)
+          setPlaylist(found)
           setTracks(normalizeYouTubeTracks(fetched.tracks))
           return
         }
-        const loaded = await fetchPlaylistTracks(client, chosen.id, {
-          onProgress: (done, total) =>
-            setBusy({ label: `Reading ${chosen.name}`, done, total }),
+        let chosen = row
+        if (!chosen) {
+          // `editable` and cloning both need to know who is signed in.
+          const profile = me ?? (await getCurrentUser(client))
+          if (!latest()) return
+          setMe(profile)
+          chosen = await getPlaylist(client, id, profile.id)
+          if (!latest()) return
+          setPlaylist(chosen)
+        }
+        const loaded = await fetchPlaylistTracks(client, id, {
+          onProgress: (done, total) => {
+            if (latest()) setBusy({ label: `Reading ${chosen.name}`, done, total })
+          },
         })
-        setTracks(loaded)
+        if (latest()) setTracks(loaded)
       } catch (failure) {
-        setError(failure.message)
+        if (latest()) setError(failure.message)
       } finally {
-        setBusy(null)
+        if (latest()) setBusy(null)
       }
     },
-    [client, youtube],
+    [client, youtube, me],
+  )
+
+  /** A row clicked on the board: its URL, and its tracks read as before. */
+  const openPlaylist = useCallback(
+    (chosen) => {
+      const from = chosen.source ?? 'spotify'
+      navigate({ view: 'sort', source: from, playlistId: chosen.id })
+      loadPlaylist(from, chosen.id, chosen)
+    },
+    [navigate, loadPlaylist],
   )
 
   const chooseStrategy = useCallback(
@@ -349,7 +431,7 @@ export function useSorterApp(auth, demo = null) {
         })
       }
     },
-    [client, writer, playlist, tracks, targetTracks, ops, movedKeys, writeBlocked],
+    [client, writer, playlist, tracks, targetTracks, ops, movedKeys, writeBlocked, setScreen],
   )
 
   const applyClone = useCallback(
@@ -381,19 +463,19 @@ export function useSorterApp(auth, demo = null) {
         setOutcome({ kind: 'failed', message: failure.message, applied: 0, canUndo: false })
       }
     },
-    [writer, playlist, me, targetTracks, strategyLabel, writeBlocked],
+    [writer, playlist, me, targetTracks, strategyLabel, writeBlocked, setScreen],
   )
 
   const cancelRun = useCallback(() => abort.current?.abort(), [])
 
-  const changeSource = useCallback(
+  /** What changing library resets, whether by the toggle, back or forward. */
+  const resetForSource = useCallback(
     (next) => {
       // A strategy the new source cannot honour must not stay selected: it
       // would render pressed and disabled at once, keep driving the preview,
       // and be impossible to clear, because the only control that could
       // clear it is the disabled row itself.
       const nextStrategy = supportedStrategyFor(next, strategyId)
-      setSource(next)
       setStrategyId(nextStrategy)
       setOptions(
         defaultStrategyOptionsFor(
@@ -408,9 +490,14 @@ export function useSorterApp(auth, demo = null) {
       setPlaylist(null)
       setTracks([])
       setError(null)
-      setScreen('playlists')
     },
     [strategyId, options],
+  )
+
+  /** The library toggle. The sync step below performs the reset. */
+  const changeSource = useCallback(
+    (next) => navigate({ view: 'home', source: next, playlistId: null }),
+    [navigate],
   )
 
   const undoLast = useCallback(async () => {
@@ -448,8 +535,55 @@ export function useSorterApp(auth, demo = null) {
     }
   }, [client, writer, playlist, writeBlocked])
 
+  /* ---- Following the URL ------------------------------------------------ */
+
+  const ready = auth.isConnected || Boolean(demo)
+  /**
+   * The source everything in memory was read and seeded for. Strategy and
+   * options start out seeded for Spotify, so a first page on YouTube counts
+   * as a switch and gets the same reset as the toggle.
+   */
+  const stateSource = useRef('spotify')
+
+  /**
+   * Bring memory in line with the URL after any navigation: a click, back,
+   * forward or a page load. See docs/2026-10-11-routes-design.md §5.
+   */
+  useEffect(() => {
+    if (!ready) return
+    // D46: while a write runs the URL stays on Progress, so back can never
+    // reach a lever that would start a second write on the same playlist.
+    if (run) {
+      if (route.view !== 'progress' && playlist) {
+        navigate({ view: 'progress', source: playlist.source ?? 'spotify', playlistId: playlist.id })
+      }
+      return
+    }
+
+    const switched = route.source !== stateSource.current
+    if (switched) {
+      stateSource.current = route.source
+      resetForSource(route.source)
+    }
+    if (route.view === 'home') return
+
+    const sort = { view: 'sort', source: route.source, playlistId: route.playlistId }
+    const open =
+      !switched && playlist?.id === route.playlistId && (playlist.source ?? 'spotify') === route.source
+    if (!open) {
+      // D44: Preview and Progress need an order chosen, or a write made, in
+      // this tab. A playlist read from the URL has neither.
+      if (route.view === 'preview' || route.view === 'progress') navigate(sort, { replace: true })
+      // oxlint-disable-next-line react/set-state-in-effect -- the URL and the network are the outside systems this effect follows
+      loadPlaylist(route.source, route.playlistId)
+      return
+    }
+    // Progress with nothing to report, such as a forward step back onto it
+    // after the playlist was opened afresh.
+    if (route.view === 'progress' && !outcome) navigate(sort, { replace: true })
+  }, [ready, run, route, playlist, outcome, navigate, loadPlaylist, resetForSource])
+
   return {
-    screen,
     setScreen,
     source,
     capabilitySource,

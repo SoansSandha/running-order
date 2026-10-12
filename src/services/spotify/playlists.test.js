@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { fetchAllPages, fetchPlaylistTracks, getCurrentUser, listEditablePlaylists } from './playlists.js'
+import { fetchAllPages, fetchPlaylistTracks, getCurrentUser, getPlaylist, listEditablePlaylists } from './playlists.js'
 
 function fakeClient(routes) {
   const calls = []
@@ -132,6 +132,36 @@ describe('listEditablePlaylists', () => {
       '/me/playlists': { items: [null, playlist('p1', 'Mine', 'u1')], next: null },
     })
     expect(await listEditablePlaylists(client, 'u1')).toHaveLength(1)
+  })
+})
+
+describe('getPlaylist', () => {
+  test('builds the same row as the library does for the same playlist', async () => {
+    const raw = playlist('p1', 'Mine', 'u1')
+    const client = fakeClient({
+      '/me/playlists': { items: [raw], next: null },
+      '/playlists/p1': raw,
+    })
+    const [fromLibrary] = await listEditablePlaylists(client, 'u1')
+    expect(await getPlaylist(client, 'p1', 'u1')).toEqual(fromLibrary)
+  })
+
+  test.each([
+    ['an owned', playlist('p1', 'Mine', 'u1'), true],
+    ['a collaborative', playlist('p3', 'Shared', 'someone', { collaborative: true }), true],
+    ["someone else's", playlist('p2', 'Theirs', 'someone'), false],
+  ])('works out access for %s playlist', async (_, raw, editable) => {
+    const client = fakeClient({ [`/playlists/${raw.id}`]: raw })
+    expect((await getPlaylist(client, raw.id, 'u1')).editable).toBe(editable)
+  })
+
+  test('asks for both track count names, and for no tracks', async () => {
+    const client = fakeClient({ '/playlists/p1': playlist('p1', 'Mine', 'u1') })
+    await getPlaylist(client, 'p1', 'u1')
+    const { fields } = client.calls[0].options.query
+    expect(fields).toContain('items.total')
+    expect(fields).toContain('tracks.total')
+    expect(fields).not.toContain('items(')
   })
 })
 

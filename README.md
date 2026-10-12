@@ -126,13 +126,17 @@ npm run dev
 | URL | Shows |
 |---|---|
 | `/?demo=1` | A synthetic library |
-| `/?demo=1&screen=preview&playlist=2` | The diff board, 12 tracks moving against 42 holding |
-| `/?demo=1&screen=progress&playlist=2&progress=running` | A reorder in flight |
-| `/?demo=1&screen=sort&csv=1` | A CSV loaded, with a match awaiting confirmation |
+| `/spotify/demo-2/preview?demo=1` | The diff board, 12 tracks moving against 42 holding |
+| `/spotify/demo-2/progress?demo=1&progress=running` | A reorder in flight |
+| `/spotify/demo-1?demo=1&csv=1` | A CSV loaded, with a match awaiting confirmation |
 | `/?debug=1` | A request log: every call beside its response |
 
 The demo data is synthetic and gated on `import.meta.env.DEV`, so it is
 tree-shaken out of production builds entirely.
+
+Every screen has its own path (`/spotify/<id>/preview` and so on), so anything
+serving a build must answer unknown paths with `index.html`. Vite's dev server
+and `npm run preview` already do.
 
 ---
 
