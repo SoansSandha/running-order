@@ -51,6 +51,8 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
   const latest = useRef(0)
   const lastDecisionAt = useRef(0)
   const sweepTicket = useRef(0)
+  // The playlist last chosen, for pairing again after the Spotify side is re-read.
+  const chosenRef = useRef(null)
 
   // I-2: Confirm/Reject/Undo remove a row, the next one slides under the
   // pointer, and the second click of a double-click decides it too.
@@ -95,6 +97,7 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
       // Only the latest choice may land: a slow first playlist resolving after
       // a second was chosen must never overwrite the second.
       const ticket = ++latest.current
+      chosenRef.current = playlistId || null
       // Finds are about this playlist's leftovers; a new playlist starts clean.
       sweepTicket.current += 1
       setFound(NOTHING_FOUND)
@@ -136,6 +139,17 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     },
     [youtube, spotifyTracks],
   )
+
+  // Mirror run §5: after a run the app re-reads the Spotify playlist, and the
+  // chosen YouTube playlist is read and paired again against both as they now
+  // are. A first load, with nothing chosen yet, does nothing.
+  const pairedAgainst = useRef(spotifyTracks)
+  useEffect(() => {
+    if (pairedAgainst.current === spotifyTracks) return
+    pairedAgainst.current = spotifyTracks
+    // oxlint-disable-next-line react/set-state-in-effect -- the two playlists are the outside systems this follows
+    if (chosenRef.current) choose(chosenRef.current)
+  }, [spotifyTracks, choose])
 
   const youtubeIds = useMemo(() => new Set(youtubeTracks.map((track) => track.id)), [youtubeTracks])
   const spotifyKeys = useMemo(() => new Set(spotifyTracks.map(spotifyKeyOf)), [spotifyTracks])
@@ -334,6 +348,8 @@ export function useMatchReview({ youtube, spotify, spotifyTracks, storage = glob
     retryPlaylists: loadPlaylists,
     result,
     unavailable,
+    youtubeTracks,
+    book,
     busy,
     error,
     remembered,

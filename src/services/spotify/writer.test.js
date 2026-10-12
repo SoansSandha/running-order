@@ -14,6 +14,10 @@ function fakeClient() {
       calls.push({ method: 'POST', path, body: options.body })
       return { id: 'new-playlist' }
     }),
+    delete: vi.fn(async (path, options) => {
+      calls.push({ method: 'DELETE', path, body: options.body })
+      return { snapshot_id: 'snap-next' }
+    }),
   }
 }
 
@@ -51,6 +55,16 @@ describe('createSpotifyWriter', () => {
     const tracks = makeTracks([{ name: 'one' }, { name: 'two' }])
     await createSpotifyWriter(client).addTracks('p1', tracks, {})
     expect(client.calls[0].body.uris).toEqual(tracks.map((t) => t.uri))
+  })
+
+  test('removeTracks sends the tracks’ URIs', async () => {
+    const client = fakeClient()
+    await createSpotifyWriter(client).removeTracks('p1', [{ uri: 'spotify:track:a' }])
+    expect(client.calls[0]).toEqual({
+      method: 'DELETE',
+      path: '/playlists/p1/items',
+      body: { items: [{ uri: 'spotify:track:a' }] },
+    })
   })
 
   test('createPlaylist returns the created playlist', async () => {

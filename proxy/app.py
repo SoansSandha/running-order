@@ -12,20 +12,43 @@ where the test suite lives. See docs/2026-09-18-youtube-mirror-design.md D13.
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from ytmusicapi import YTMusic
-from ytmusicapi.exceptions import YTMusicServerError
+from ytmusicapi.exceptions import YTMusicServerError, YTMusicUserError
 
 VITE_ORIGIN = "http://127.0.0.1:5173"
+WRITE_METHODS = {"POST", "PATCH", "DELETE"}
 
-app = FastAPI(title="Running Order — YouTube proxy")
+# The proxy serves the app and nothing else, so it serves no API docs pages.
+app = FastAPI(title="Running Order — YouTube proxy", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def refuse_foreign_writes(request: Request, call_next):
+    """A write must come from the app's own page (mirror run design D48).
+
+    The app is cross-origin to this port, so a browser always sends its
+    Origin on a write. A write with any other Origin, or with none (curl,
+    another program), did not come from the app.
+    """
+    if request.method in WRITE_METHODS and request.headers.get("origin") != VITE_ORIGIN:
+        return JSONResponse({"detail": "Writes are accepted only from the app."}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[VITE_ORIGIN],
-    allow_methods=["GET", "POST", "PATCH"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+# D48: DNS rebinding reaches this port under another name, as if it were that
+# page's own origin, so CORS never applies. Added last, so it runs first.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 
 _client = None
 
@@ -192,3 +215,94 @@ def get_track(video_id: str) -> dict:
         raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
     first = tracks[0] if tracks else None
     return {"track": first if first and first.get("videoId") == video_id else None}
+
+
+class AddItems(BaseModel):
+    videoIds: list[str] = Field(min_length=1)
+
+
+class MoveItem(BaseModel):
+    setVideoId: str
+    beforeSetVideoId: str | None = None
+
+
+class PlaylistItem(BaseModel):
+    videoId: str
+    setVideoId: str
+
+
+class RemoveItems(BaseModel):
+    items: list[PlaylistItem] = Field(min_length=1)
+
+
+MALFORMED = "YouTube Music refused the request as malformed."
+
+
+def succeeded(response) -> bool:
+    """ytmusicapi answers an edit with its status string, or with the whole
+    response when YouTube did not succeed."""
+    status = response.get("status") if isinstance(response, dict) else response
+    return isinstance(status, str) and "SUCCEEDED" in status
+
+
+@app.post("/playlists/{playlist_id}/items")
+def add_items(playlist_id: str, body: AddItems) -> dict:
+    """Add videos, and answer the item id YouTube gave each (mirror run design §3).
+
+    With `duplicates=False` YouTube refuses the whole request if any video is
+    already in the playlist, so a refusal (409) means nothing was added.
+    """
+    try:
+        response = get_client().add_playlist_items(playlist_id, body.videoIds, duplicates=False)
+    except YTMusicUserError:
+        # Malformed input, not a dead session: the client is kept (no re-auth).
+        raise HTTPException(status_code=400, detail=MALFORMED)
+    except Exception:
+        reset_client()
+        # Never interpolate the exception's own string (see get_playlist).
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
+    if not succeeded(response):
+        raise HTTPException(status_code=409, detail="YouTube Music refused the addition.")
+    return {
+        "added": [
+            {"videoId": result.get("videoId"), "setVideoId": result.get("setVideoId")}
+            for result in response.get("playlistEditResults") or []
+            if result
+        ]
+    }
+
+
+@app.patch("/playlists/{playlist_id}/order")
+def move_item(playlist_id: str, body: MoveItem) -> dict:
+    """Move one item before another, or, with no successor, to the end.
+
+    This is edit_playlist's own form, so the JS move plan passes straight
+    through (mirror design §4). A move with no successor goes to the end, as
+    the probe measured (mirror run design §9).
+    """
+    move = (body.setVideoId, body.beforeSetVideoId) if body.beforeSetVideoId else body.setVideoId
+    try:
+        response = get_client().edit_playlist(playlist_id, moveItem=move)
+    except YTMusicUserError:
+        raise HTTPException(status_code=400, detail=MALFORMED)
+    except Exception:
+        reset_client()
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
+    if not succeeded(response):
+        raise HTTPException(status_code=409, detail="YouTube Music refused the move.")
+    return {"ok": True}
+
+
+@app.delete("/playlists/{playlist_id}/items")
+def remove_items(playlist_id: str, body: RemoveItems) -> dict:
+    """Remove items, each named by its videoId and setVideoId. Undo is the only caller."""
+    try:
+        response = get_client().remove_playlist_items(playlist_id, [item.model_dump() for item in body.items])
+    except YTMusicUserError:
+        raise HTTPException(status_code=400, detail=MALFORMED)
+    except Exception:
+        reset_client()
+        raise HTTPException(status_code=502, detail="Could not reach YouTube Music.")
+    if not succeeded(response):
+        raise HTTPException(status_code=409, detail="YouTube Music refused the removal.")
+    return {"ok": True}

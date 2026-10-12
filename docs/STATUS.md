@@ -249,11 +249,9 @@ password; it is not in the repository and must never be.
 
 ### Carried into the next session
 
-- **Security, before write endpoints land (2c):** CORS constrains browsers
-  only — it does not stop `curl`. All protection currently rests on the
-  `127.0.0.1` bind alone, with no second layer such as a shared-secret header.
-  Fine for a local read-only tool; decide deliberately before the proxy can
-  write.
+- **Security, settled (D48):** the proxy refuses a request addressed to any
+  host but `127.0.0.1` or `localhost`, and a write from any origin but the
+  app's. See [the mirror run design](2026-10-11-mirror-run-design.md).
 - **`get_client()` caches at process scope with no lock.** Harmless with one
   read-only endpoint; a latent race if concurrent handling is added.
 - **`buildMoveOps` now enforces non-null keys** alongside uniqueness, since
@@ -402,6 +400,41 @@ between screens. Spec: [2026-10-11-routes-design.md](2026-10-11-routes-design.md
 - Two faults the live check caught and fixed: a first page on YouTube skipped
   the source reset (an unhonourable option stayed pressed and disabled), and
   a slow library read landing after back filled the other library's board.
+
+---
+
+## Mirror run — done 2026-10-12
+
+**Update YouTube** on the review screen:
+- adds every settled find to the playlist that lacks it, with Spotify's additions going to its end;
+- reorders the YouTube playlist into Spotify's order, with the songs only on YouTube at the bottom.
+
+**Undo** removes exactly what the run added and puts YouTube's order back.
+Spec: [2026-10-11-mirror-run-design.md](2026-10-11-mirror-run-design.md).
+
+**How it is built:**
+- The proxy writes for the first time. A Host check and an Origin check guard it (D48), and its API docs pages are off.
+- A run needs every row settled (D50).
+- Running again resumes a stopped or failed run (D55). An unfinished undo record carries forward, so Undo still reaches back to before the first attempt (D54).
+- The undo record is written before each request, so an add whose answer is lost is still undone. Undo confirms each removal by reading it back before taking it off the record.
+
+**Measured live** (spec §9):
+- Ids never change on an add, a move or a removal.
+- A move with no successor goes to the end.
+- A 50-song add is accepted and answered in full.
+- Spotify's remove body is `items`.
+- YouTube's reads lag a move by about 5s, and lag a bulk removal too. The run's check, Undo's checks and the post-add read all wait that out.
+
+**Checked live** on "test punjabi songs", from the owner's Chrome through the Claude in Chrome connector (live checks now run there, not in Playwright; see CLAUDE.md):
+- **First run:** added 88 to YouTube and 57 to Spotify, then made 311 moves. The check was green.
+- **Its Undo:** both playlists came back identical, ids included. The first try stopped safely on the removal lag; the code was fixed and Undo was pressed again.
+- **Stop, run again, Undo:** stopped at move 21. The rerun finished the 290 moves left. Undo reached back to before the stopped attempt, and both playlists came back identical.
+- 0 console errors throughout. `scripts/check-columns.js` reports `{}`, with the panel Ready.
+
+**Left open:**
+- The review's dropdown count stays at its pre-run figure until the library is read again.
+- Undo's "Removing from YouTube 0 of N" counts entries that are already gone.
+- A Back across documents (a page loaded fresh, then Back) unloads the page mid-run. The URL hold covers only navigation inside the app.
 
 ---
 

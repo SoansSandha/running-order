@@ -6,7 +6,7 @@
  * second planner. See docs/2026-09-18-youtube-mirror-design.md §4.
  */
 
-import { addTracksInChunks, createPlaylist, reorderTrack } from './mutations.js'
+import { addTracksInChunks, createPlaylist, removeTracks, reorderTrack } from './mutations.js'
 
 export function createSpotifyWriter(client) {
   return {
@@ -30,6 +30,11 @@ export function createSpotifyWriter(client) {
         tracks.map((track) => track.uri),
         { onProgress },
       )
+    },
+
+    /** Removes every copy of each track's URI; at most 100 per call. */
+    removeTracks(playlistId, tracks) {
+      return removeTracks(client, playlistId, tracks.map((track) => track.uri))
     },
 
     /**

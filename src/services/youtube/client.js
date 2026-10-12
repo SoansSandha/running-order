@@ -36,19 +36,48 @@ export class YouTubeSessionExpiredError extends Error {
   }
 }
 
+/**
+ * YouTube Music refused a change: an addition, a move or a removal. The
+ * proxy reports it as a 409. For an addition it means nothing in that
+ * request was added (mirror run design §3).
+ */
+export class YouTubeRefusedError extends Error {
+  constructor(detail) {
+    super(detail || 'YouTube Music refused the change.')
+    this.name = 'YouTubeRefusedError'
+    // For an addition, the proxy's 409 means nothing in that request was
+    // added (`duplicates=False`). The mirror run reads this property rather
+    // than this class, so src/plan/ imports nothing from here.
+    this.nothingAdded = true
+  }
+}
+
+/** The proxy's own `detail`, or null when the body carries none. */
+const detailOf = (response) => response.json().then((answer) => answer?.detail, () => null)
+
 export function createYouTubeClient({ baseUrl = DEFAULT_BASE_URL, fetch: fetchImpl = globalThis.fetch } = {}) {
-  async function request(path) {
+  async function request(path, { method = 'GET', body } = {}) {
+    // A write carries JSON: the proxy reads a body only as JSON (D48).
+    const init =
+      method === 'GET'
+        ? undefined
+        : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
     let response
     try {
-      response = await fetchImpl(`${baseUrl}${path}`)
+      response = await fetchImpl(`${baseUrl}${path}`, init)
     } catch (cause) {
       // A refused connection is a different problem from a failing request,
       // and the user can act on it, so it keeps its own type.
       throw new ProxyUnavailableError(cause)
     }
     if (response.status === 401) throw new YouTubeSessionExpiredError()
+    if (response.status === 409) throw new YouTubeRefusedError(await detailOf(response))
     if (!response.ok) {
-      throw new Error(`YouTube proxy returned ${response.status} for ${path}`)
+      // A 502 says what failed ("Could not reach YouTube Music."). A 422's
+      // detail is a list, not a sentence, so only a string is passed on.
+      const detail = await detailOf(response)
+      const said = typeof detail === 'string' ? `: ${detail}` : ''
+      throw new Error(`YouTube proxy returned ${response.status} for ${path}${said}`)
     }
     return response.json()
   }
@@ -91,6 +120,31 @@ export function createYouTubeClient({ baseUrl = DEFAULT_BASE_URL, fetch: fetchIm
     async track(videoId) {
       const body = await request(`/track/${encodeURIComponent(videoId)}`)
       return body?.track ?? null
+    },
+
+    /** Add videos in this order, and answer the item id each was given (mirror run design §3). */
+    async addItems(playlistId, videoIds) {
+      const body = await request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
+        method: 'POST',
+        body: { videoIds },
+      })
+      return body?.added ?? []
+    },
+
+    /** Move one item before another; a null `beforeSetVideoId` moves it to the end. */
+    async moveItem(playlistId, setVideoId, beforeSetVideoId) {
+      await request(`/playlists/${encodeURIComponent(playlistId)}/order`, {
+        method: 'PATCH',
+        body: { setVideoId, beforeSetVideoId },
+      })
+    },
+
+    /** Remove playlist items, each named by its videoId and setVideoId. */
+    async removeItems(playlistId, items) {
+      await request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
+        method: 'DELETE',
+        body: { items },
+      })
     },
   }
 }

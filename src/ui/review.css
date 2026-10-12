@@ -188,3 +188,43 @@ a.lever-quiet {
     gap: 6px;
   }
 }
+
+/* ---- The mirror run's panel (mirror run design §7) -------------------- */
+
+.mirror-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mirror-list {
+  margin-top: 10px;
+}
+
+.mirror-list > summary {
+  cursor: pointer;
+}
+
+/* Two cells, so the layout check measures them: the song, and where it goes. */
+.mirror-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.mirror-song {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mirror-undo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}

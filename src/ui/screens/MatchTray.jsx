@@ -201,7 +201,7 @@ export function MatchTray({
               </p>
             ) : null}
             {linkWaits && deciding ? (
-              <p className="row-sub">Deciding waits until the search ends or is stopped.</p>
+              <p className="row-sub">Deciding waits until the search or the update ends, or is stopped.</p>
             ) : null}
             {manual?.length === 0 ? (
               <p className="row-sub">Nothing found on {other}.</p>

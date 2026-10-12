@@ -7,6 +7,7 @@
  */
 
 import { normalizePlaylistItem } from '../model/track.js'
+import { normalizeYouTubeTracks } from '../services/youtube/track.js'
 
 let counter = 0
 
@@ -90,6 +91,23 @@ export function makeEpisode({ name = 'Episode', show = 'Show', addedAt = '2022-0
       },
     },
     index,
+  )
+}
+
+/**
+ * Build normalized YouTube Tracks through the real normalizer. A row's
+ * setVideoId defaults to `set-<videoId>`; give two copies of a song their
+ * own to tell them apart.
+ */
+export function makeYouTubeTracks(rows) {
+  return normalizeYouTubeTracks(
+    rows.map(({ videoId, title = videoId, setVideoId = `set-${videoId}`, seconds = 200 }) => ({
+      videoId,
+      setVideoId,
+      title,
+      artists: [{ name: 'Artist', id: null }],
+      duration_seconds: seconds,
+    })),
   )
 }
 

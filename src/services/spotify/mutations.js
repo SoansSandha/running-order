@@ -40,6 +40,16 @@ export async function addTracksInChunks(client, playlistId, uris, { onProgress }
 }
 
 /**
+ * Remove every copy of each URI, at most 100 per call. Undo of a mirror run
+ * is the only caller: it removes songs the run added, which the playlist did
+ * not hold before (mirror run design §6). The probe measured this body key
+ * (§9).
+ */
+export async function removeTracks(client, playlistId, uris) {
+  await client.delete(playlistItemsPath(playlistId), { body: { items: uris.map((uri) => ({ uri })) } })
+}
+
+/**
  * Replace the playlist's entire contents.
  *
  * NOT used for in-place sorting: it resets every added_at to now, which
