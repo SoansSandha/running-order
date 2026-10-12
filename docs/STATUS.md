@@ -100,17 +100,17 @@ each row inking green as its own write returns.
 | URL | Shows |
 |---|---|
 | `/?demo=1` | Playlists |
-| `/?demo=1&screen=sort` | Sort |
-| `/?demo=1&screen=preview&playlist=2` | Preview with 12 moving against 42 holding |
-| `/?demo=1&screen=progress&playlist=2&progress=running` | Progress mid-run at 18 of 45 |
-| `/?demo=1&screen=progress&progress=done` | Progress, finished |
-| `/?demo=1&screen=preview&playlist=2&focus=blocked` | Preview scrolled to the blocked tracks, proving their red treatment |
-| `/?demo=1&screen=sort&csv=1` | Sort with a seeded CSV, reconciliation report, and a fuzzy suggestion to accept |
-| `/?demo=1&screen=preview&playlist=2&limit=4` | A short playlist, which leaves the unlit board field visible |
+| `/spotify/demo-1?demo=1` | Sort |
+| `/spotify/demo-2/preview?demo=1` | Preview with 12 moving against 42 holding |
+| `/spotify/demo-2/progress?demo=1&progress=running` | Progress mid-run at 18 of 45 |
+| `/spotify/demo-1/progress?demo=1&progress=done` | Progress, finished |
+| `/spotify/demo-2/preview?demo=1&focus=blocked` | Preview scrolled to the blocked tracks, proving their red treatment |
+| `/spotify/demo-1?demo=1&csv=1` | Sort with a seeded CSV, reconciliation report, and a fuzzy suggestion to accept |
+| `/spotify/demo-2/preview?demo=1&limit=4` | A short playlist, which leaves the unlit board field visible |
 
-`playlist=2` is a nearly-sorted playlist; `playlist=1` (default) is fully
-shuffled so every row moves. Demo data is gated on `import.meta.env.DEV` and
-tree-shaken from production.
+`demo-2` is a nearly-sorted playlist; `demo-1` is fully shuffled so every row
+moves. Demo data is gated on `import.meta.env.DEV` and tree-shaken from
+production.
 
 ---
 
@@ -377,6 +377,31 @@ Left open:
   "That track could not be found." (a rate limit included).
 - A song listed twice, one copy paired: marking the other copy as not on the
   other service sets both aside. Rare, and Undo restores both.
+
+---
+
+## Routes — done 2026-10-11
+
+Every screen has its own URL, `/` stays home, and back and forward move
+between screens. Spec: [2026-10-11-routes-design.md](2026-10-11-routes-design.md).
+
+| Path | Screen |
+|---|---|
+| `/`, `/?source=youtube` | The Spotify or YouTube library (Connect while signed out) |
+| `/:source/:id` | Sort |
+| `/:source/:id/preview`, `/:source/:id/progress` | Preview, Progress |
+| `/spotify/:id/review` | Match to YouTube |
+
+- A refresh re-reads Sort and Review by id. Preview and Progress fall back to
+  Sort, since the order chosen and the write made lived in that tab (D44).
+- While a write runs the URL is held on Progress (D46).
+- Spotify's redirect URI is still `/`, so no install has to re-register (D45).
+- Checked live on "test punjabi songs" in both services: back and forward,
+  a dry run, refresh on every route, Review held until the Spotify side is
+  read, the library toggle and back, and a playlist URL opened signed out.
+- Two faults the live check caught and fixed: a first page on YouTube skipped
+  the source reset (an unhonourable option stayed pressed and disabled), and
+  a slow library read landing after back filled the other library's board.
 
 ---
 
