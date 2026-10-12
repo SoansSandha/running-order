@@ -141,8 +141,10 @@ that is still open, so a late paste can't land on a closed row.
 ## Testing in the browser
 
 Unit tests can't see layout, focus, real clicks, or console errors.
-`playwright-cli` (installed globally; see its skill) drives the running
-app so Claude can check those directly.
+Two tools drive the running app so Claude can check those directly:
+`playwright-cli` (installed globally; see its skill) for demo mode and
+`scripts/check-columns.js`, and the owner's own Chrome, through the
+Claude in Chrome connector, for live checks.
 
 ### When
 
@@ -182,11 +184,17 @@ playwright-cli -s=check close
 - Sign in only with the Spotify and YouTube Music test profiles. Every
   live test uses the playlist "test punjabi songs". Never open, sort, or
   change any other playlist, even on the test accounts.
-- Use the `live` session, with its profile kept in the gitignored
-  `.playwright-cli/live-profile`:
-  `playwright-cli -s=live open http://127.0.0.1:5173 --headed --profile=.playwright-cli/live-profile`.
-  The first time, ask the user to sign in to the Spotify test profile in
-  that window. Never type credentials.
+- Live checks run in the owner's Chrome through the Claude in Chrome
+  connector (browser use), never in a `playwright-cli` window: that
+  Chrome is already signed in to the Spotify test profile, and the owner
+  does not sign in to Playwright. Work only in tabs the connector opens
+  in its own tab group at `http://127.0.0.1:5173`, never in the owner's
+  other tabs. If that Chrome isn't signed in to the Spotify test
+  profile, ask the user to sign in there. Never type credentials.
+- The match book and undo records live in that Chrome's localStorage. A
+  match book made in another browser (the owner uses Firefox) is
+  exported by the owner to `.local/real-library/match-book.json`, and
+  Claude loads it into that Chrome.
 - YouTube Music needs `npm run dev` (it starts the proxy) and a
   `proxy/browser.json` captured from the YouTube test profile.
 - Reordering "test punjabi songs" needs no permission. After checking
@@ -201,6 +209,7 @@ playwright-cli -s=check close
 
 ### Clean up
 
-Close every session you opened (`playwright-cli -s=<name> close`) and
-stop any server you started. Snapshots, screenshots, and logs land in
+Close every session you opened (`playwright-cli -s=<name> close`),
+every Chrome tab you opened through the connector, and stop any server
+you started. Snapshots, screenshots, and logs land in
 `.playwright-cli/`, which is gitignored. Never stage them.
