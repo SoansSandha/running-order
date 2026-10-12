@@ -47,7 +47,7 @@ Continuing the numbering in the earlier designs.
 | D44 | **Reload what it can.** Sort and Review re-fetch the playlist by id. Preview and Progress fall back to Sort when the playlist had to be loaded from the URL | Strategy and options in the query string; every refresh going home | The owner's choice. A reloaded Preview would show the default order as if it had been chosen. A CSV is a local file and cannot survive a refresh either way |
 | D45 | **Connect is a gate, not a route.** It renders at whatever URL is open while signed out. Spotify's redirect URI stays `/` | A `/connect` route; a new redirect URI such as `/callback` | Every self-hoster registered `http://127.0.0.1:5173/` with Spotify. A new URI breaks every install until it is re-registered |
 | D46 | **While a write runs, the URL is held on Progress.** Back or forward during a run puts the Progress URL straight back | Letting the browser leave Progress mid-write | Leaving would reach Sort while the write carries on, and from there a second write could start against the same playlist. The on-screen back button already hides during a run |
-| D47 | **`setScreen` keeps its name and navigates.** `setScreen('preview')` pushes the open playlist's Preview path | Renaming it to `navigate` or `go` across the screens | Sort, Preview, Progress and Review do not change at all |
+| D47 | **`setScreen` keeps its name and navigates.** `setScreen('preview')` pushes the open playlist's Preview path | Renaming it to `navigate` or `go` across the screens | Sort, Preview and Progress do not change at all. Review changes only for a refresh (§5) |
 
 ---
 
@@ -66,7 +66,9 @@ Continuing the numbering in the earlier designs.
   a Spotify playlist, and Sort offers "Match to YouTube" only there.
 - **Any other path** — an unknown source, an unknown view, extra segments — is
   replaced by `/`.
-- **The id is URI-encoded** in the path and decoded when read.
+- **An id is letters, digits, `_` and `-` only,** as Spotify and YouTube ids
+  are. Any other id is replaced by `/`, so a pasted URL can never put `/`,
+  `..` or `%` into an API path.
 - **Other query parameters are kept** as the app moves between screens, so
   `?debug=1`, `?raw=1` and `?demo=1` survive navigation.
 
@@ -148,9 +150,15 @@ the user is signed in, or demo data is loaded, before it reads anything.
   `toAppPlaylists([{ id, title, count: tracks.length }])`, and the tracks from
   `normalizeYouTubeTracks`, exactly as today.
 
-**Loads that land late are dropped.** Each load remembers the route it
-started for and sets nothing if the URL has moved on by the time it returns.
-StrictMode's second effect pass in development is absorbed the same way.
+**Loads that land late are dropped.** Each load takes a ticket and sets
+nothing once a newer load has started. StrictMode's second effect pass in
+development starts a second load that supersedes the first.
+
+**Review on a refresh.** Review scores matches against the Spotify tracks as
+they stand when a YouTube playlist is chosen. After a refresh those tracks are
+still being read, so Review shows the same reading meter and error notice
+Sort does, and "Match against" stays disabled until the Spotify side has been
+read.
 
 ### Unchanged
 
@@ -197,12 +205,13 @@ demo playlist. `demo-2` is the nearly sorted one, as `playlist=2` was.
 | `src/App.jsx` | Picks the screen from the route; passes route and `navigate` to the hook | The walkthrough |
 | `src/ui/useSorterApp.js` | Drops `screen`; `setScreen` navigates; `source` derived; the sync step (§5) | The walkthrough |
 | `src/services/spotify/playlists.js` | `toPlaylist` shared by `listEditablePlaylists` and new `getPlaylist` | `playlists.test.js` |
+| `src/ui/screens/Review.jsx` | The reading meter and error notice; "Match against" disabled until the Spotify side is read (§5) | The walkthrough |
 | `src/ui/demoData.js` | Playlist from the path; `screen=` and `playlist=` retired (§6) | `check-columns.js` |
 | `scripts/check-columns.js` | Its seven screen URLs move to §6's paths | Running it |
 | `docs/STATUS.md`, `README.md` | Demo URL tables updated; README notes that a host must serve `index.html` for unknown paths | Reading them |
 
-The screens — Connect, Playlists, Sort, Preview, Progress, Review — and the
-match tray are not changed.
+Connect, Playlists, Sort, Preview, Progress and the match tray are not
+changed.
 
 ---
 
@@ -212,7 +221,7 @@ match tray are not changed.
 - every route in §3 survives `pathFor` then `parseRoute` unchanged;
 - `/` and `/?source=youtube` parse to home with the right source, and an
   unknown `?source` falls back to `spotify`;
-- an id with characters that need encoding round-trips;
+- an id with any character but letters, digits, `_` and `-` redirects home;
 - each bad path redirects: unknown source, unknown view, extra segments,
   `/youtube/:id/review`;
 - query parameters other than `source` are carried by `pathFor`.
@@ -240,6 +249,7 @@ for an owned, a collaborative, and someone else's playlist.
 | Case | What happens |
 |---|---|
 | The id does not exist, or the account cannot read it | Sort shows the existing error notice, with "All playlists" to go back |
+| A pasted id holding `/`, `..`, `%` or anything but letters, digits, `_` and `-` | Replaced by `/` before anything is fetched (§3) |
 | `/youtube/LM` or another YouTube system playlist | `toAppPlaylists` drops it, so it is treated as not found |
 | The proxy is not running and the URL names a YouTube playlist | The existing proxy error shows on Sort |
 | Two loads race (a quick back, then forward) | The earlier one lands, sees the URL has moved on, and sets nothing (§5) |
